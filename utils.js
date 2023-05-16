@@ -67,3 +67,4 @@ function startService(path, port) {
 }
 
 module.exports = { cloneRepository, installDependencies, buildService, startService };
+
