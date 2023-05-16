@@ -1,0 +1,1 @@
+Application to clone all the microservices and run in local.
