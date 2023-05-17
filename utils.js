@@ -44,23 +44,39 @@ function buildService(path) {
   });
 }
 
-function startService(path, port) {
+// function startService(path, port) {
+//   return new Promise((resolve, reject) => {
+//     const startScriptExists = require('fs').existsSync(`${path}/package.json`) &&
+//       require(`${path}/package.json`).scripts &&
+//       require(`${path}/package.json`).scripts.start;
+
+//     if (!startScriptExists) {
+//       reject(`Cannot start service at path ${path}: no start script found in package.json`);
+//     }
+
+//     const command = `cd ${path} && PORT=${port} npm start`;
+
+//     exec(command, (error, stdout, stderr) => {
+//       if (error) {
+//         reject(error);
+//       } else {
+//         resolve(stdout.trim());
+//       }
+//     });
+//   });
+// }
+
+function startService(path, port, debugCommand = '') {
+  const command = debugCommand
+    ? `PORT=${port} code --folder-uri "${path}" --remote-debugging-port=${port} --inspect-brk=0`
+    : `PORT=${port} code --folder-uri "${path}"`;
+
   return new Promise((resolve, reject) => {
-    const startScriptExists = require('fs').existsSync(`${path}/package.json`) &&
-      require(`${path}/package.json`).scripts &&
-      require(`${path}/package.json`).scripts.start;
-
-    if (!startScriptExists) {
-      reject(`Cannot start service at path ${path}: no start script found in package.json`);
-    }
-
-    const command = `cd ${path} && PORT=${port} npm start`;
-
     exec(command, (error, stdout, stderr) => {
       if (error) {
         reject(error);
       } else {
-        resolve(stdout.trim());
+        resolve();
       }
     });
   });

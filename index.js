@@ -2,6 +2,7 @@ const prompt = require('prompt');
 const { cloneRepository, installDependencies, startService } = require('./utils');
 const { exec } = require('child_process');
 const fs = require('fs');
+const path = require('path');
 const microservices = [];
 
 
@@ -43,10 +44,44 @@ async function addDebugScript(path, debugValue, port, configBasePath, certsBaseP
 
     await fs.promises.writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2));
     console.log(`Updated package.json with debug script in ${packageJsonPath}`);
+
+    if (debugValue === 'y') {
+      const vscodeDirPath = `${path}/.vscode`;
+      const launchConfigPath = `${vscodeDirPath}/launch.json`;
+
+      if (!fs.existsSync(vscodeDirPath)) {
+        fs.mkdirSync(vscodeDirPath);
+      }
+
+      const launchConfigData = {
+        version: '0.2.0',
+        configurations: [
+          {
+            type: 'node',
+            request: 'launch',
+            name: packageJson.name || 'Launch Program',
+            env: {
+              CONFIGBASEPATH: configBasePath,
+              CERTBASEPATH: certsBasePath,
+              PORT: port,
+              CORS: 'true',
+              ENV: 'SIT1'
+            },
+            program: '${workspaceFolder}/dist/index.js',
+            outFiles: ['${workspaceFolder}/dist/**/*.js']
+          }
+        ]
+      };
+
+      await fs.promises.writeFile(launchConfigPath, JSON.stringify(launchConfigData, null, 2));
+      console.log(`Updated launch.json with launch configuration in ${launchConfigPath}`);
+    }
   } catch (error) {
     console.error(`Error updating package.json: ${error}`);
   }
 }
+
+
 
 function createDebugScript(debugValue, port, configBasePath, certsBasePath) {
   const debugScript = `PORT=${port} CONFIGBASEPATH=${configBasePath} CERTSBASEPATH=${certsBasePath}`;
@@ -68,25 +103,46 @@ function updateDebugScript(existingScript, debugValue, port, configBasePath, cer
 
 async function startMicroservices() {
   for (const microservice of microservices) {
-    const { path, port, debugValue } = microservice;
+    const { path, port, debugValue, hasBuild } = microservice;
 
     console.log(`Starting microservice at ${path} on port ${port}`);
 
     try {
-      await startService(path, port, debugValue);
+      if (hasBuild) {
+        if (debugValue === 'y') {
+          const debugCommand = `PORT=${port} CONFIGBASEPATH=${CONFIGBASEPATH} CERTBASEPATH=${CERTBASEPATH} ${debugValue}`;
+          await startService(path, port, debugCommand);
+        } else if (debugValue === 'N') {
+          const packageJsonPath = `${path}/package.json`;
+          const packageJsonData = await fs.promises.readFile(packageJsonPath, 'utf-8');
+          const packageJson = JSON.parse(packageJsonData);
+
+          if (packageJson.scripts && packageJson.scripts.start) {
+            await startService(path, port, 'npm run start');
+          } else {
+            console.log(`No start script found in package.json for microservice at ${path}`);
+          }
+        } else {
+          await startService(path, port);
+        }
+      } else {
+        console.log(`Build not completed for microservice at ${path}. Skipping start.`);
+      }
     } catch (error) {
       console.error(`Error starting microservice at ${path}: ${error}`);
     }
   }
 }
+
+
 async function promptInput() {
-  prompt.get(['repoUrl', 'port', 'debugValue', 'CONFIGBASEPATH', 'CERTBASEPATH'], async (err, result) => {
+  prompt.get(['repoUrl', 'port', 'debugValue'], async (err, result) => {
     if (err) {
       console.error(err);
       return;
     }
 
-    const { repoUrl, port, debugValue, CONFIGBASEPATH, CERTBASEPATH } = result;
+    const { repoUrl, port, debugValue } = result;
 
     if (repoUrl.toLowerCase() === 'done') {
       startMicroservices();
@@ -112,6 +168,10 @@ async function promptInput() {
       return;
     }
 
+    // Set default values for CONFIGBASEPATH and CERTBASEPATH based on full paths of existing directories
+    const configBasePath = fs.existsSync('./config') ? path.resolve('./config') : '';
+    const certsBasePath = fs.existsSync('./nodecerts') ? path.resolve('./nodecerts') : '';
+
     try {
       await cloneRepository(repoUrl);
       console.log(`Cloned repository ${repoUrl}`);
@@ -122,8 +182,8 @@ async function promptInput() {
       await runBuildScript(servicePath);
       console.log(`Built microservice ${repoName}`);
 
-      await addDebugScript(servicePath, debugValue, port, CONFIGBASEPATH, CERTBASEPATH);
-      console.log(`Added debug script to package.json with value "${debugValue}", CONFIGBASEPATH="${CONFIGBASEPATH}", and CERTBASEPATH="${CERTBASEPATH}"`);
+      await addDebugScript(servicePath, debugValue, port, configBasePath, certsBasePath);
+      console.log(`Added debug script to package.json with value "${debugValue}"`);
 
       microservices.push({ path: servicePath, port: port, debugValue: debugValue });
       console.log(`Added microservice ${repoName} on port ${port}`);
@@ -134,6 +194,8 @@ async function promptInput() {
     }
   });
 }
+
+
 
 
 // Start the application
