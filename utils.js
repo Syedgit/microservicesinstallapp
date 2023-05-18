@@ -1,16 +1,32 @@
 const { exec } = require('child_process');
+const net = require('net');
 
-function cloneRepository(url) {
+const cloneRepository = (repoUrl) => {
   return new Promise((resolve, reject) => {
-    exec(`git clone ${url}`, (error, stdout, stderr) => {
+    exec(`git ls-remote --heads ${repoUrl}`, (error, stdout, stderr) => {
       if (error) {
         reject(error);
       } else {
-        resolve(stdout.trim());
+        const branches = stdout
+          .split('\n')
+          .filter((line) => line.trim().length > 0)
+          .map((line) => line.split('\t')[1].replace('refs/heads/', ''))
+          .sort(); // Sort branches in ascending order
+
+        const latestBranch = branches.pop(); // Get the latest branch (last in the sorted list)
+
+        exec(`git clone --branch ${latestBranch} --single-branch ${repoUrl}`, (error, stdout, stderr) => {
+          if (error) {
+            reject(error);
+          } else {
+            resolve();
+          }
+        });
       }
     });
   });
-}
+};
+
 
 function installDependencies(path) {
   return new Promise((resolve, reject) => {
@@ -66,6 +82,25 @@ function buildService(path) {
 //   });
 // }
 
+function isPortInUse(port) {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.once('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        resolve(true);
+      } else {
+        reject(err);
+      }
+    });
+    server.once('listening', () => {
+      server.close();
+      resolve(false);
+    });
+    server.listen(port);
+  });
+}
+
+
 function startService(path, port, debugCommand = '') {
   const command = debugCommand
     ? `PORT=${port} code --folder-uri "${path}" --remote-debugging-port=${port} --inspect-brk=0`
@@ -82,5 +117,5 @@ function startService(path, port, debugCommand = '') {
   });
 }
 
-module.exports = { cloneRepository, installDependencies, buildService, startService };
+module.exports = { cloneRepository, installDependencies, buildService, startService, isPortInUse };
 

@@ -1,5 +1,5 @@
 const prompt = require('prompt');
-const { cloneRepository, installDependencies, startService } = require('./utils');
+const { cloneRepository, installDependencies, startService, isPortInUse } = require('./utils');
 const { exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
@@ -109,10 +109,7 @@ async function startMicroservices() {
 
     try {
       if (hasBuild) {
-        if (debugValue === 'y') {
-          const debugCommand = `PORT=${port} CONFIGBASEPATH=${CONFIGBASEPATH} CERTBASEPATH=${CERTBASEPATH} ${debugValue}`;
-          await startService(path, port, debugCommand);
-        } else if (debugValue === 'N') {
+        if (debugValue === 'N') {
           const packageJsonPath = `${path}/package.json`;
           const packageJsonData = await fs.promises.readFile(packageJsonPath, 'utf-8');
           const packageJson = JSON.parse(packageJsonData);
@@ -122,8 +119,6 @@ async function startMicroservices() {
           } else {
             console.log(`No start script found in package.json for microservice at ${path}`);
           }
-        } else {
-          await startService(path, port);
         }
       } else {
         console.log(`Build not completed for microservice at ${path}. Skipping start.`);
@@ -132,7 +127,14 @@ async function startMicroservices() {
       console.error(`Error starting microservice at ${path}: ${error}`);
     }
   }
+
+  console.log('Microservices running:');
+  for (const microservice of microservices) {
+    const { path, port } = microservice;
+    console.log(`- Microservice at ${path} running on port ${port}`);
+  }
 }
+
 
 
 async function promptInput() {
@@ -172,6 +174,15 @@ async function promptInput() {
     const configBasePath = fs.existsSync('./config') ? path.resolve('./config') : '';
     const certsBasePath = fs.existsSync('./nodecerts') ? path.resolve('./nodecerts') : '';
 
+    // Check if the entered port is already in use
+    const portInUse = await isPortInUse(port);
+
+    if (portInUse) {
+      console.log(`Port ${port} is already in use. Please enter a different port number.`);
+      promptInput();
+      return;
+    }
+
     try {
       await cloneRepository(repoUrl);
       console.log(`Cloned repository ${repoUrl}`);
@@ -194,6 +205,7 @@ async function promptInput() {
     }
   });
 }
+
 
 
 
