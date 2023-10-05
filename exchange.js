@@ -16,3 +16,18 @@ const filteredArray = array.filter(item => {
 });
 
 console.log(filteredArray);
+
+// UTC
+
+function filterByDate(startDate, endDate) {
+  return array.filter((item) => {
+    const fillDate = moment.utc(item.fillDate); // Parse the date in UTC
+    return fillDate.isBetween(startDate, endDate, null, '[]'); // '[]' includes the start and end dates
+  });
+}
+
+const startDate = moment.utc('2023-10-01');
+const endDate = moment.utc('2023-10-05');
+
+const filteredArray = filterByDate(startDate, endDate);
+console.log(filteredArray);
