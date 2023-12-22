@@ -2,6 +2,38 @@ NEw Code :
 
 const CCrypto = require('crypto-js');
 
+function encryptSHA256(data, secretKey, salt) {
+    const secretKeyWordArray = CCrypto.enc.Utf8.parse(secretKey);
+    const saltWordArray = CCrypto.enc.Utf8.parse(salt);
+    const dataWithSalt = CCrypto.lib.WordArray.create().concat(data, saltWordArray);
+    const encryptedData = CCrypto.AES.encrypt(dataWithSalt, secretKeyWordArray, {
+        mode: CCrypto.mode.CBC,
+        padding: CCrypto.pad.Pkcs7,
+        iv: CCrypto.lib.WordArray.create([0, 0, 0, 0, 0, 0, 0, 0]),
+    });
+    return encryptedData.ciphertext.toString(CCrypto.enc.Base64);
+}
+
+function generateEncryptedValue(paymentId, specialtyID, secretKey) {
+    const concatString = paymentId.toString() + "_" + specialtyID;
+    const salt = CCrypto.lib.WordArray.random(16); // Generate a random 16-byte salt
+    const encryptedResult = encryptSHA256(CCrypto.enc.Utf8.parse(concatString), secretKey, salt);
+    return encodeURIComponent(encryptedResult);
+}
+
+// Example usage
+const paymentId = 13780298; // paymentId is a number
+const specialtyID = '8018928';
+const secretKey = "EiE0BVQle0xFjZvYOupKjXCWAcAwBaTjlZ7G7rryNos=";
+const result = generateEncryptedValue(paymentId, specialtyID, secretKey);
+console.log('Expected Result:', result);
+
+
+
+
+
+const CCrypto = require('crypto-js');
+
 function encryptSHA256(data, secretKey) {
     const secretKeyWordArray = CCrypto.enc.Utf8.parse(secretKey);
     return CCrypto.AES.encrypt(data, secretKeyWordArray, {
