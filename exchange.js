@@ -99,4 +99,48 @@ export interface IAddress {
     zipCode: string;
 }
 
+
+  Crypto:
+
   
+const CCrypto = require("crypto-js");
+// import sha256 from 'crypto-js/sha256';
+// import hmacSHA512 from 'crypto-js/hmac-sha512';
+// import Base64 from 'crypto-js/enc-base64';
+
+function paymenIdEncryption(args) {
+    const convertToString = `${args.paymentId} + "_" + ${args.specialtyID}`.toString();
+    const secret_key = "EiE0BVQle0xFjZvYOupKjXCWAcAwBaTjlZ7G7rryNos=";
+    const encryptedData = CCrypto.AES.encrypt(convertToString, secret_key, {
+        keySize: 256 / 8,
+    }).toString();
+    const encodedEncText = CCrypto.enc.Base64.stringify(CCrypto.enc.Utf8.parse(encryptedData));
+
+  const UrlencodedEncText = encodeURIComponent(encodedEncText)
+
+  return UrlencodedEncText;
+}
+
+Compare:
+
+Sit3: GwJPNUfPXZZsuc0iqOFhn%2BYhMJKxXBUGl9g3iKqL8CE%3D
+
+Local: VTJGc2RHVmtYMTkxWXlna2IrcTdxeFhZZ29maEpjQWRsK3hkY05jZU41VUQ4L2NLbzJKNWI2TVNkQ0lOOGFDMg%3D%3D
+
+// function paymenIdEncryptionWithPath(args) {
+//     const convertToString = `${args.paymentId} + "_" + ${args.specialtyID}`.toString();
+//     const secret_key = "EiE0BVQle0xFjZvYOupKjXCWAcAwBaTjlZ7G7rryNos=";
+
+//   const message, nonce, path, privateKey; // ...
+//   const hashDigest = sha256(nonce + message);
+//   const hmacDigest = Base64.stringify(hmacSHA512(path + hashDigest, privateKey));
+
+//   return hmacDigest;
+// }
+
+const args = {specialtyID: '8089205', paymentId: 1384220};
+
+console.log("Encryption1st", paymenIdEncryption(args));
+
+
+
