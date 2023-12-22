@@ -143,4 +143,15 @@ const args = {specialtyID: '8089205', paymentId: 1384220};
 console.log("Encryption1st", paymenIdEncryption(args));
 
 
+  DBPL logic:
+
+  <func:function name="xsutil:encryptSha256">
+			<xsl:param name="parameter"/>
+			<func:result select="dp:encode(dp:encrypt-string('http://www.w3.org/2001/04/xmlenc#aes256-cbc',$genericKey,$parameter),'url')"/>
+		</func:function>
+		<func:function name="xsutil:decryptSha256">
+			<xsl:param name="parameter"/>
+			<func:result select="dp:decrypt-data('http://www.w3.org/2001/04/xmlenc#aes256-cbc',$genericKey,dp:decode($parameter,'url'))"/>
+		</func:function>
+
 
