@@ -155,3 +155,34 @@ console.log("Encryption1st", paymenIdEncryption(args));
 		</func:function>
 
 
+	Result : 
+
+	const CCrypto = require('crypto-js');
+const CEncUtf8 = CCrypto.enc.Utf8;
+const CEncBase64 = CCrypto.enc.Base64;
+
+function encryptSha256(convertToString, secretKey) {
+    // Encrypt the convertToString using AES-256 with CBC mode
+    const encryptedData = CCrypto.AES.encrypt(convertToString, secretKey, {
+        keySize: 256 / 8,
+        mode: CCrypto.mode.CBC,
+        padding: CCrypto.pad.Pkcs7,
+        iv: CCrypto.lib.WordArray.random(128 / 8),
+    });
+
+    // Encode the encrypted result to Base64
+    const base64Result = encryptedData.toString(CEncBase64);
+
+    // URL encode the Base64-encoded result
+    const urlEncodedResult = encodeURIComponent(base64Result);
+
+    return urlEncodedResult;
+}
+
+// Example usage
+const secretKey = "EiE0BVQle0xFjZvYOupKjXCWAcAwBaTjlZ7G7rryNos=";
+const convertToString = "your_convertToString_here"; // Replace with your actual value
+const result = encryptSha256(convertToString, secretKey);
+console.log('Encrypted and URL Encoded Result:', result);
+
+
