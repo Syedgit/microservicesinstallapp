@@ -1,3 +1,33 @@
+NEw Code :
+
+const CCrypto = require('crypto-js');
+
+function encryptSHA256(data, secretKey) {
+    const secretKeyWordArray = CCrypto.enc.Utf8.parse(secretKey);
+    return CCrypto.AES.encrypt(data, secretKeyWordArray, {
+        mode: CCrypto.mode.CBC,
+        padding: CCrypto.pad.Pkcs7,
+        iv: CCrypto.lib.WordArray.create([0]),
+    }).toString();
+}
+
+function generateEncryptedValue(paymentId, specialtyID, secretKey) {
+    const concatString = paymentId.toString() + "_" + specialtyID;
+    const encryptedResult = encryptSHA256(concatString, secretKey);
+    const base64Result = CCrypto.enc.Base64.stringify(CCrypto.enc.Utf8.parse(encryptedResult));
+    const percentEncodedResult = encodeURIComponent(base64Result);
+    return percentEncodedResult;
+}
+
+// Example usage
+const paymentId = 13780298; // paymentId is a number
+const specialtyID = '8018928';
+const secretKey = "EiE0BVQle0xFjZvYOupKjXCWAcAwBaTjlZ7G7rryNos=";
+const result = generateEncryptedValue(paymentId, specialtyID, secretKey);
+console.log('Expected Result:', result);
+
+
+
 const array = [
   { fillDate: '2023-10-01', pres: 'Artipla' },
   { fillDate: '2023-10-04', pres: 'Met' },
