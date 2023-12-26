@@ -1,3 +1,29 @@
+const crypto = require('crypto');
+const algorithm = 'aes-256-cbc';
+const key = 'EiE0BVQle0xFjZvYOupKjXCWAcAwBaTjlZ7G7rryNos=';
+
+
+function encrypt(text) {
+    let iv = crypto.randomBytes(16);
+    let cipher = crypto.createCipheriv(algorithm, Buffer.from(key, 'base64'), iv);
+    let encrypted = cipher.update(text, 'utf-8', 'base64');
+    encrypted += cipher.final('base64');
+
+    const encryptedData = {
+          iv: iv.toString('base64'),
+          encrypted: encrypted,
+      }
+
+   const URLEncode = encodeURIComponent(encryptedData.encrypted);
+    return URLEncode;
+}
+
+const text = '13780298_8018928';
+const result = encrypt(text);
+console.log('IV:', result.iv);
+console.log('Encrypted Text:', result);
+
+
 Updated: 
 
 const crypto = require('crypto');
