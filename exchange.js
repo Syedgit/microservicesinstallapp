@@ -1,4 +1,46 @@
-NEw Code :
+NEw Code :Latest
+
+Couple of issues:
+
+Constant Secret Key: You're using a constant secret key (secretKey) for encryption. To generate a unique key each time, you need to either generate a random key or use a different key-generation mechanism.
+
+Base64 Encoding: You're encoding the encrypted result in Base64 twice (once when encrypting and once when converting to UTF-8). You should only perform the Base64 encoding once.
+
+Updated code fix example below:
+
+const CCrypto = require('crypto-js');
+
+function generateSecretKey() {
+  const keySize = 32; // 256 bits
+  return CCrypto.lib.WordArray.random(keySize).toString();
+}
+
+function encryptSHA256(data, secretKey) {
+    const secretKeyWordArray = CCrypto.enc.Utf8.parse(secretKey);
+    const encrypted = CCrypto.AES.encrypt(data, secretKeyWordArray, {
+        mode: CCrypto.mode.CBC,
+        padding: CCrypto.pad.Pkcs7,
+        iv: CCrypto.lib.WordArray.create([0]),
+    });
+    
+    return encrypted.toString();
+}
+
+function generateEncryptedValue(paymentId, specialtyID, secretKey) {
+    const concatString = paymentId.toString() + "_" + specialtyID;
+    const encryptedResult = encryptSHA256(concatString, secretKey);
+    const percentEncodedResult = encodeURIComponent(encryptedResult);
+    return percentEncodedResult;
+}
+
+
+const paymentId = 15680298; 
+const specialtyID = '8018290';
+const secretKey = generateSecretKey(); 
+const result = generateEncryptedValue(paymentId, specialtyID, secretKey);
+console.log('Encrypted and Percent Encoded Result:', result);
+
+
 
 const CCrypto = require('crypto-js');
 
