@@ -1,3 +1,25 @@
+const crypto = require('crypto');
+const algorithm = 'aes-128-cbc';
+const key = 'NjYwMzIzNDU2Mjc0OTc4NQ==';
+ 
+ 
+function encrypt(text) {
+let iv = Buffer.from(crypto.randomBytes(16), 'base64'); 
+let cipher = crypto.createCipheriv('aes-128-cbc', Buffer.from(key, 'base64'), iv);
+let encrypted = cipher.update(text);
+encrypted = Buffer.concat([encrypted, cipher.final()]);
+var encryptedWithIVPrepended = Buffer.concat([iv, encrypted]);
+ 
+return { 	iv						: iv.toString('base64'), 
+			encryptedWithIVPrepended: encryptedWithIVPrepended.toString('base64') 
+		};
+}
+
+
+
+
+
+
 NEw Code :Latest
 
 Couple of issues:
