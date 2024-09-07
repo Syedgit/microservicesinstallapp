@@ -1,16 +1,57 @@
-grid.component.service.ts:62 TypeError: Cannot read properties of undefined (reading 'disconnect')
-    at PsDateFieldset.disconnectedCallback (ps-date-fieldset.entry.js:55:23)
-    at safeCall (index-c5589148.js:1213:30)
-    at disconnectInstance (index-c5589148.js:1476:5)
-    at index-c5589148.js:1483:7
-    at Generator.next (<anonymous>)
-    at asyncGeneratorStep (asyncToGenerator.js:3:1)
-    at _next (asyncToGenerator.js:17:1)
-    at asyncToGenerator.js:22:1
-    at new ZoneAwarePromise (zone.js:2702:25)
-    at asyncToGenerator.js:14:1 undefined
-loadComponent	@	grid.component.service.ts:62
-(anonymous)	@	grid.component.service.ts:116
-Zone - Promise.then		
-(anonymous)	@	libs_angular_pharmac…n_src_index_ts.js:2
-Show 140 more frames
+constructor() {
+  this.memberForm = this.fb.group({
+    firstName: ['', Validators.required],
+    lastName: ['', Validators.required],
+    dateOfBirth: this.fb.group({
+      month: ['', Validators.required],
+      day: ['', Validators.required],
+      year: ['', Validators.required]
+    }),
+    memberId: ['', Validators.required]
+  });
+}
+
+
+<ps-input
+  formControlName="firstName"
+  ngDefaultControl
+  name="firstName"
+  input-required="true"
+  label="First Name">
+</ps-input>
+
+<ps-input
+  formControlName="lastName"
+  ngDefaultControl
+  name="lastName"
+  input-required="true"
+  label="Last Name">
+</ps-input>
+
+<!-- Date of Birth -->
+<fieldset>
+  <legend>Date of Birth</legend>
+  <input
+    formControlName="month"
+    placeholder="MM"
+    type="text"
+  />
+  <input
+    formControlName="day"
+    placeholder="DD"
+    type="text"
+  />
+  <input
+    formControlName="year"
+    placeholder="YYYY"
+    type="text"
+  />
+</fieldset>
+
+<ps-input
+  formControlName="memberId"
+  ngDefaultControl
+  name="memberId"
+  input-required="true"
+  label="Member ID">
+</ps-input>
