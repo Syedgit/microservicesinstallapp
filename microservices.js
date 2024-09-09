@@ -1,53 +1,70 @@
-import { Component, ElementRef, ViewChild, OnInit, inject } from '@angular/core';
-import { FormBuilder, FormGroup, Validators } from '@angular/forms';
-import { NavigationService } from '@digital-blocks/angular/core/util/services';
+import { CommonModule } from '@angular/common';
+import { Component, CUSTOM_ELEMENTS_SCHEMA, ElementRef, inject, OnInit, ViewChild } from '@angular/core';
+import {
+  FormBuilder,
+  FormGroup,
+  FormsModule,
+  ReactiveFormsModule,
+  Validators
+} from '@angular/forms';
+import { SpinningLoaderComponent } from '@digital-blocks/angular/core/components';
 import { LayoutFacade } from '@digital-blocks/angular/core/store/layout';
+import { NavigationService } from '@digital-blocks/angular/core/util/services';
+import {
+  MemberInfo,
+  MemberAuthenticationModule,
+  GetMemberInfoAndTokenResponse
+} from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/member-authentication';
+
 import { MemberAuthenticationStore } from './member-authentication.store';
-import { GetMemberInfoAndTokenResponse, MemberInfo } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/member-authentication';
 
 @Component({
   selector: 'lib-member-authentication',
+  standalone: true,
+  imports: [
+    CommonModule,
+    FormsModule,
+    ReactiveFormsModule,
+    MemberAuthenticationModule,
+    SpinningLoaderComponent
+  ],
   templateUrl: 'member-authentication.component.html',
-  styleUrls: ['member-authentication.component.scss']
+  styleUrls: ['member-authentication.component.scss'],
+  schemas: [CUSTOM_ELEMENTS_SCHEMA],
+  providers: [MemberAuthenticationStore],
+  host: { ngSkipHydration: 'true' }
 })
 export class MemberAuthenticationComponent implements OnInit {
   @ViewChild('month') month!: ElementRef;
   @ViewChild('day') day!: ElementRef;
   @ViewChild('year') year!: ElementRef;
-
-  error: boolean;
-  memberForm: FormGroup;
-  public readonly memberTokenResponse$ = this.store.memberTokenResponse$;
-  public readonly loading$ = this.store.loading$;
-
   protected readonly navigationService = inject(NavigationService);
   protected readonly layoutFacade = inject(LayoutFacade);
-  private readonly store = inject(MemberAuthenticationStore);
+  public readonly store = inject(MemberAuthenticationStore);
   private fb = inject(FormBuilder);
+  public readonly memberTokenResponse$ = this.store.memberTokenResponse$;
+  public readonly loading$ = this.store.loading$;
+  memberForm: FormGroup;
 
   constructor() {
     this.memberForm = this.fb.group({
       firstName: ['', Validators.required],
       lastName: ['', Validators.required],
-      memberId: ['', Validators.required],
-      dateOfBirth: ['', Validators.required]  // Placeholder for DOB validation
+      dateOfBirth: ['', Validators.required],
+      memberId: ['', Validators.required]
     });
-    this.error = false;
   }
-
   ngOnInit(): void {}
 
-  handleButtonClick(): void {
-    const isValid = this.isDateValid();
-    this.error = !isValid;
-
-    if (isValid) {
-      this.updateFormWithDate(); // Manually set the dateOfBirth in form
-      this.getMemberInfoAndToken();
+  handleKeyDown(event: KeyboardEvent): void {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
     }
   }
 
   public getMemberInfoAndToken(): void {
+    const isDateValid = this.isDateValid();
+    if (isDateValid) () => this.updateFormWithDate();
     if (this.memberForm.valid) {
       const patientInfo: MemberInfo = this.constructBackendReq();
       this.store.getMemberInfoAndToken(patientInfo);
@@ -67,7 +84,7 @@ export class MemberAuthenticationComponent implements OnInit {
     }
   }
 
-  private constructBackendReq(): MemberInfo {
+  private constructBackendReq() {
     const patientInfo: MemberInfo = {
       ...this.memberForm.value,
       flowName: 'MEMBER_ID_LOOKUP',
@@ -77,108 +94,22 @@ export class MemberAuthenticationComponent implements OnInit {
     return patientInfo;
   }
 
-  isDateValid(): boolean {
-    const m = parseInt(this.month.nativeElement.value, 10);
-    const d = parseInt(this.day.nativeElement.value, 10);
-    const y = parseInt(this.year.nativeElement.value, 10);
-
+  isDateValid() {
+    const { month, day, year } = this;
+    const m = parseInt(month.nativeElement.value, 10);
+    const d = parseInt(day.nativeElement.value, 10);
+    const y = parseInt(year.nativeElement.value, 10);
     const hasAllFields = m && d && y;
-    const date = new Date(`${m}/${d}/${y}`);
-    const isValid =
-      !isNaN(date as any) &&
-      date.getMonth() + 1 === m &&
-      date.getDate() === d &&
-      date.getFullYear() === y;
-
-    return Boolean(hasAllFields && isValid);
+    const date = `${y}-${m}-${d}`;
+    return Boolean(hasAllFields);
   }
 
   updateFormWithDate(): void {
     const m = this.month.nativeElement.value;
     const d = this.day.nativeElement.value;
     const y = this.year.nativeElement.value;
-    
-    // Construct the date in MM/DD/YYYY format
-    const dateOfBirth = `${m}/${d}/${y}`;
-
-    // Update the form control with the formatted date
-    this.memberForm.patchValue({
-      dateOfBirth
-    });
+    const dateOfBirth = `${y}-${m}-${d}`;
+    this.memberForm.value.dateOfBirth = dateOfBirth;
   }
 }
 
-
-html
-
-<ng-container *ngIf="loading$ | async; else memberAuthTemplate">
-  <ps-tile>
-    <util-spinning-loader [loading]="loading$ | async"></util-spinning-loader>
-  </ps-tile>
-</ng-container>
-
-<ng-template #memberAuthTemplate>
-  <div class="member-container">
-    <ng-container>
-      <form [formGroup]="memberForm">
-        <ps-helper helper-id="helper-245">
-          <h3>Transfer your HyVee prescriptions to an in-network pharmacy</h3>
-        </ps-helper>
-
-        <!-- First Name -->
-        <ps-input
-          formControlName="firstName"
-          ngDefaultControl
-          name="firstName"
-          input-required="true"
-          label="First Name">
-        </ps-input>
-
-        <!-- Last Name -->
-        <ps-input
-          formControlName="lastName"
-          ngDefaultControl
-          name="lastName"
-          input-required="true"
-          label="Last Name">
-        </ps-input>
-
-        <!-- Date of Birth Fields -->
-        <ps-date-fieldset legend="Date of Birth" is-dob>
-          <input slot="month" #month />
-          <input slot="day" #day />
-          <input slot="year" #year />
-          <ul *ngIf="error" slot="error">
-            <li>Please add a valid month</li>
-            <li>Please add a valid day</li>
-            <li>Please add a valid year</li>
-          </ul>
-        </ps-date-fieldset>
-
-        <!-- Member ID -->
-        <ps-input
-          formControlName="memberId"
-          ngDefaultControl
-          name="memberId"
-          input-required="true"
-          label="Member ID">
-        </ps-input>
-
-        <!-- Submit Button -->
-        <div>
-          <ps-button
-            is-full-width="true"
-            size="md"
-            submit="true"
-            variant="solid"
-            [isFullWidth]="layoutFacade.breakpointSmall$ | async"
-            (keydown)="handleKeyDown($event)"
-            (click)="handleButtonClick()"
-            class="continue-button">
-            Continue
-          </ps-button>
-        </div>
-      </form>
-    </ng-container>
-  </div>
-</ng-template>
