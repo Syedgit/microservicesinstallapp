@@ -4,7 +4,7 @@ export class MemberAuthenticationComponent {
     firstName: '',
     lastName: '',
     memberId: '',
-    dateOfBirth: ''  // Add dateOfBirth error handling
+    dateOfBirth: ''
   };
 
   constructor(private fb: FormBuilder) {
@@ -15,45 +15,45 @@ export class MemberAuthenticationComponent {
     });
   }
 
-  // Common validation function with dateOfBirth validation added
+  // Simplified common validation function with custom error messages
   validateFormFields(): void {
-    Object.keys(this.formErrors).forEach(field => {
-      if (field !== 'dateOfBirth') {  // Skip dateOfBirth for now
-        const control = this.memberForm.get(field);
+    const firstNameControl = this.memberForm.get('firstName');
+    const lastNameControl = this.memberForm.get('lastName');
+    const memberIdControl = this.memberForm.get('memberId');
 
-        if (control && control.touched) {
-          if (control.hasError('required')) {
-            this.formErrors[field] = `! ${this.capitalize(field)} is required`;
-          } else if (control.hasError('pattern')) {
-            this.formErrors[field] = this.getPatternErrorMessage(field);
-          } else {
-            this.formErrors[field] = '';  // Clear the error if no issues
-          }
-        }
-      }
-    });
+    // Check first name
+    if (firstNameControl?.hasError('required') && firstNameControl.touched) {
+      this.formErrors['firstName'] = '! Enter a first name';
+    } else if (firstNameControl?.hasError('pattern') && firstNameControl.touched) {
+      this.formErrors['firstName'] = '! First name must contain only letters';
+    } else {
+      this.formErrors['firstName'] = '';  // Clear error
+    }
+
+    // Check last name
+    if (lastNameControl?.hasError('required') && lastNameControl.touched) {
+      this.formErrors['lastName'] = '! Enter a last name';
+    } else if (lastNameControl?.hasError('pattern') && lastNameControl.touched) {
+      this.formErrors['lastName'] = '! Last name must contain only letters';
+    } else {
+      this.formErrors['lastName'] = '';  // Clear error
+    }
+
+    // Check member ID
+    if (memberIdControl?.hasError('required') && memberIdControl.touched) {
+      this.formErrors['memberId'] = '! Enter a member ID';
+    } else if (memberIdControl?.hasError('pattern') && memberIdControl.touched) {
+      this.formErrors['memberId'] = '! Member ID must contain only numbers';
+    } else {
+      this.formErrors['memberId'] = '';  // Clear error
+    }
 
     // Validate dateOfBirth (manually)
     if (!this.isDateValid()) {
       this.formErrors['dateOfBirth'] = '! Enter a valid date as MM/DD/YYYY';
     } else {
-      this.formErrors['dateOfBirth'] = '';  // Clear the error if the date is valid
+      this.formErrors['dateOfBirth'] = '';  // Clear error if the date is valid
     }
-  }
-
-  // Helper to capitalize the first letter of the field name
-  capitalize(field: string): string {
-    return field.charAt(0).toUpperCase() + field.slice(1);
-  }
-
-  // Helper to return pattern-specific error messages
-  getPatternErrorMessage(field: string): string {
-    if (field === 'firstName' || field === 'lastName') {
-      return `! ${this.capitalize(field)} must contain only letters`;
-    } else if (field === 'memberId') {
-      return `! ${this.capitalize(field)} must contain only numbers`;
-    }
-    return '';
   }
 
   // Form submission handler
@@ -79,31 +79,4 @@ export class MemberAuthenticationComponent {
 
     return isValidMonth && isValidDay && isValidYear;
   }
-
-  // Other methods (e.g., constructBackendReq()) remain unchanged
 }
-
-
-html
-
-<form [formGroup]="memberForm">
-
-  <!-- First Name Error -->
-  <p *ngIf="formErrors.firstName" class="error">{{ formErrors.firstName }}</p>
-
-  <!-- Last Name Error -->
-  <p *ngIf="formErrors.lastName" class="error">{{ formErrors.lastName }}</p>
-
-  <!-- Date of Birth Error -->
-  <p *ngIf="formErrors.dateOfBirth" class="error">{{ formErrors.dateOfBirth }}</p>
-
-  <!-- Member ID Error -->
-  <p *ngIf="formErrors.memberId" class="error">{{ formErrors.memberId }}</p>
-
-  <!-- Continue Button -->
-  <div>
-    <ps-button is-full-width="true" size="md" submit="true" variant="solid" (click)="getMemberInfoAndToken()" class="continue-button">
-      Continue
-    </ps-button>
-  </div>
-</form>
