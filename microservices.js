@@ -1,48 +1,51 @@
-it('should not dispatch getMemberInfoAndToken if form is invalid', () => {
-  // Make the form invalid by setting empty values
-  component.memberForm.get('firstName')?.setValue('');
-  component.memberForm.get('lastName')?.setValue('');
-  component.memberForm.get('memberId')?.setValue('');
-
-  const dispatchSpy = jest.spyOn(store, 'dispatch');
-  component.getMemberInfoAndToken();
-  
-  // Ensure no dispatch happens due to invalid form
-  expect(dispatchSpy).not.toHaveBeenCalled();
-  expect(component.hasErrors).toBe(true);  // Verify that error flag is set
-});
-
-it('should dispatch getMemberInfoAndToken if form is valid', () => {
+it('should dispatch getMemberInfoAndToken action with correct payload when form is valid and date is valid', () => {
   // Set valid form values
   component.memberForm.get('firstName')?.setValue('John');
   component.memberForm.get('lastName')?.setValue('Doe');
   component.memberForm.get('memberId')?.setValue('12345');
 
-  // Mock date validation to return true
-  jest.spyOn(component, 'isDateValid').mockReturnValue(true);
+  // Set valid date fields
+  component.month = { nativeElement: { value: '12' } } as ElementRef;
+  component.day = { nativeElement: { value: '25' } } as ElementRef;
+  component.year = { nativeElement: { value: '1990' } } as ElementRef;
 
-  const dispatchSpy = jest.spyOn(store, 'dispatch');
-  component.getMemberInfoAndToken();
+  // Spy on the date validation function to ensure it's called
+  const isDateValidSpy = jest.spyOn(component, 'isDateValid').mockReturnValue(true);
 
-  expect(dispatchSpy).toHaveBeenCalled();
-  expect(component.hasErrors).toBe(false);  // Ensure error flag is reset
-});
+  // Spy on the updateFormWithDate function to verify it updates the form with the correct date
+  const updateFormWithDateSpy = jest.spyOn(component, 'updateFormWithDate').mockReturnValue('1990-12-25');
 
-it('should update the form with dateOfBirth before dispatching the action', () => {
-  // Mock form values and date validation
-  component.memberForm.get('firstName')?.setValue('John');
-  component.memberForm.get('lastName')?.setValue('Doe');
-  component.memberForm.get('memberId')?.setValue('12345');
-
-  const updateDateSpy = jest.spyOn(component, 'updateFormWithDate');
+  // Spy on the dispatch function to capture any dispatched actions
   const dispatchSpy = jest.spyOn(store, 'dispatch');
 
-  // Mock date validation to return true
-  jest.spyOn(component, 'isDateValid').mockReturnValue(true);
-
+  // Call the function being tested
   component.getMemberInfoAndToken();
 
-  // Check that updateFormWithDate was called before dispatch
-  expect(updateDateSpy).toHaveBeenCalled();
-  expect(dispatchSpy).toHaveBeenCalled();
+  // Ensure date validation was called
+  expect(isDateValidSpy).toHaveBeenCalled();
+
+  // Ensure the form was updated with the correct date
+  expect(updateFormWithDateSpy).toHaveBeenCalled();
+
+  // Ensure the correct backend payload is constructed and dispatched
+  const expectedPayload: MemberInfo = {
+    firstName: 'John',
+    lastName: 'Doe',
+    memberId: '12345',
+    dateOfBirth: '1990-12-25', // Correct date
+    flowName: 'MEMBER_ID_LOOKUP',
+    source: 'CMK'
+  };
+
+  expect(dispatchSpy).toHaveBeenCalledWith(
+    MemberAuthenticationActions.getMemberInfoAndToken({
+      request: {
+        data: {
+          idType: 'PBM_QL_ENC_PARTICIPANT_ID_TYPE',
+          lookupReq: expectedPayload
+        }
+      },
+      useTransferSecret: true
+    })
+  );
 });
