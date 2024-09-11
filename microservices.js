@@ -1,50 +1,51 @@
-it('should dispatch getMemberInfoAndToken action with correct payload when form is valid and date is valid', () => {
-  // Set valid form values
-  component.memberForm.get('firstName')?.setValue('John');
-  component.memberForm.get('lastName')?.setValue('Doe');
-  component.memberForm.get('memberId')?.setValue('12345');
+it('should call updateFormWithDate, patch dateOfBirth, validate the form, and dispatch getMemberInfoAndToken action with correct payload', () => {
+  // Initialize the form in the test
+  component.memberForm = new FormBuilder().group({
+    firstName: ['John'],
+    lastName: ['Doe'],
+    memberId: ['12345'],
+    dateOfBirth: ['']
+  });
 
-  // Set valid date fields
-  component.month = { nativeElement: { value: '12' } } as ElementRef;
-  component.day = { nativeElement: { value: '25' } } as ElementRef;
-  component.year = { nativeElement: { value: '1990' } } as ElementRef;
-
-  // Spy on the date validation function to ensure it's called
-  const isDateValidSpy = jest.spyOn(component, 'isDateValid').mockReturnValue(true);
-
-  // Spy on the updateFormWithDate function to verify it updates the form with the correct date
+  // Spy on the updateFormWithDate method and mock return value
   const updateFormWithDateSpy = jest.spyOn(component, 'updateFormWithDate').mockReturnValue('1990-12-25');
 
-  // Spy on the dispatch function to capture any dispatched actions
+  // Spy on patchValue to ensure dateOfBirth is patched
+  const patchValueSpy = jest.spyOn(component.memberForm, 'patchValue');
+
+  // Spy on dispatch to check if the correct action is called
   const dispatchSpy = jest.spyOn(store, 'dispatch');
 
-  // Call the function being tested
+  // Call the method that triggers everything
   component.getMemberInfoAndToken();
 
-  // Ensure date validation was called
-  expect(isDateValidSpy).toHaveBeenCalled();
-
-  // Ensure the form was updated with the correct date
+  // Ensure updateFormWithDate was called
   expect(updateFormWithDateSpy).toHaveBeenCalled();
 
-  // Ensure the correct backend payload is constructed and dispatched
-  const expectedPayload: MemberInfo = {
+  // Ensure patchValue is called with the correct date of birth
+  expect(patchValueSpy).toHaveBeenCalledWith({ dateOfBirth: '1990-12-25' });
+
+  // Create the expected payload for the backend call
+  const expectedPatientInfo = {
     firstName: 'John',
     lastName: 'Doe',
     memberId: '12345',
-    dateOfBirth: '1990-12-25', // Correct date
+    dateOfBirth: '1990-12-25',
     flowName: 'MEMBER_ID_LOOKUP',
     source: 'CMK'
   };
 
+  const expectedRequest = {
+    data: {
+      idType: 'PBM_QL_ENC_PARTICIPANT_ID_TYPE',
+      lookupReq: expectedPatientInfo
+    }
+  };
+
+  // Ensure the dispatch method was called with the correct action and payload
   expect(dispatchSpy).toHaveBeenCalledWith(
     MemberAuthenticationActions.getMemberInfoAndToken({
-      request: {
-        data: {
-          idType: 'PBM_QL_ENC_PARTICIPANT_ID_TYPE',
-          lookupReq: expectedPayload
-        }
-      },
+      request: expectedRequest,
       useTransferSecret: true
     })
   );
