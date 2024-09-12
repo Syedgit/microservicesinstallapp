@@ -1,4 +1,4 @@
-it('should call updateFormWithDate, patch dateOfBirth, validate the form, and dispatch getMemberInfoAndToken action with correct payload', fakeAsync(() => {
+it('should call updateFormWithDate, patch dateOfBirth, validate the form, and dispatch getMemberInfoAndToken action with correct payload', waitForAsync(() => {
   const patientInfo = {
     firstName: 'John',
     lastName: 'Doe',
@@ -36,25 +36,32 @@ it('should call updateFormWithDate, patch dateOfBirth, validate the form, and di
     statusDescription: 'Success'
   });
 
+  // Subscribe to memberTokenResponse$ before calling getMemberInfoAndToken
+  component.memberTokenResponse$.subscribe(
+    (data) => {
+      expect(data.statusCode).toBe('0000');
+      expect(data.access_token).toBe('someToken');
+    },
+    (error) => {
+      fail('Observable threw an error: ' + error);
+    }
+  );
+
   // Call the component method
   component.getMemberInfoAndToken();
 
-  // Assert that all methods were called
-  expect(isDateValidSpy).toHaveBeenCalled();
-  expect(updateFormWithDateSpy).toHaveBeenCalled();
-  expect(storeSpy).toHaveBeenCalledWith(patientInfo);
+  // Use whenStable to ensure all async operations complete
+  fixture.whenStable().then(() => {
+    // Assert that all methods were called
+    expect(isDateValidSpy).toHaveBeenCalled();
+    expect(updateFormWithDateSpy).toHaveBeenCalled();
+    expect(storeSpy).toHaveBeenCalledWith(patientInfo);
 
-  // Ensure that the observable emitted and was processed
-  component.memberTokenResponse$.subscribe((data) => {
-    expect(data.statusCode).toBe('0000');
-    expect(data.access_token).toBe('someToken');
+    expect(navigateSpy).toHaveBeenCalledWith(
+      '/pharmacy/-/transfer/current-prescriptions',
+      { queryParamsHandling: 'preserve' },
+      { navigateByPath: true }
+    );
+    expect(navigateSpy).toHaveBeenCalledTimes(1);
   });
-
-  tick(); // Simulate passage of time to process observable
-  expect(navigateSpy).toHaveBeenCalledWith(
-    '/pharmacy/-/transfer/current-prescriptions',
-    { queryParamsHandling: 'preserve' },
-    { navigateByPath: true }
-  );
-  expect(navigateSpy).toHaveBeenCalledTimes(1);
 }));
