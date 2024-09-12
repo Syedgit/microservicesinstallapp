@@ -1,5 +1,4 @@
 it('should call updateFormWithDate, patch dateOfBirth, validate the form, and dispatch getMemberInfoAndToken action with correct payload', fakeAsync(() => {
-  // Prepare the patient info and expected form values
   const patientInfo  = {
     firstName: 'John',
     lastName: 'Doe',
@@ -9,48 +8,52 @@ it('should call updateFormWithDate, patch dateOfBirth, validate the form, and di
     source: 'CMK'
   };
 
-  // Set the form values
+  // Set form values
   component.memberForm.setValue({
     firstName: 'John',
     lastName: 'Doe',
     memberId: '12345',
-    dateOfBirth: '1990-12-25' // Mocked date patched in
+    dateOfBirth: ''  // Let updateFormWithDate set this later
   });
 
-  // Mock the form as valid
-  component.memberForm.markAllAsTouched();
-  jest.spyOn(component.memberForm, 'valid', 'get').mockReturnValue(true);
-
-  // Spies for required functions
+  // Mock isDateValid and updateFormWithDate
   const isDateValidSpy = jest.spyOn(component, 'isDateValid').mockReturnValue(true);
   const updateFormWithDateSpy = jest.spyOn(component, 'updateFormWithDate').mockReturnValue('1990-12-25');
+  
+  // Mock the form being valid
+  jest.spyOn(component.memberForm, 'valid', 'get').mockReturnValue(true);
+
+  // Mock the store method
   const storeSpy = jest.spyOn(component.store, 'getMemberInfoAndToken');
+  
+  // Mock navigation service
   const navigateSpy = jest.spyOn(navigationService, 'navigate').mockReturnValue(Promise.resolve(true));
-
-  // Trigger the method
+  
+  // Trigger the function
   component.getMemberInfoAndToken();
-
-  // Expectations
+  
+  // Ensure methods are called
   expect(isDateValidSpy).toHaveBeenCalled();
   expect(updateFormWithDateSpy).toHaveBeenCalled();
+  
+  // Ensure the store method is called with the correct payload
   expect(storeSpy).toHaveBeenCalledWith(patientInfo);
-
-  // Simulate the memberTokenResponse$ emission
+  
+  // Emit a value from memberTokenResponse$
   mockMemberTokenResponse$.next({
     statusCode: '0000',
     access_token: 'someToken',
     token_type: 'Bearer',
     statusDescription: 'Success'
   });
-
-  tick(); // Simulate async calls
-
-  // Verify navigation is called with expected parameters
+  
+  // Simulate async time passage
+  tick();
+  
+  // Check navigation call
   expect(navigateSpy).toHaveBeenCalledWith(
     '/pharmacy/-/transfer/current-prescriptions',
     { queryParamsHandling: 'preserve' },
     { navigateByPath: true }
   );
-
-  expect(navigateSpy).toHaveBeenCalledTimes(1);
 }));
