@@ -1,1 +1,228 @@
-/node_modules
+[
+    {
+        "id": 7389902,
+        "idType": "PBM_QL_PARTICIPANT_ID_TYPE",
+        "memberType": "PBM_QL_PARTICIPANT_ID_TYPE",
+        "firstName": "john",
+        "lastName": "miller",
+        "personCode": "01",
+        "gender": "M",
+        "dateOfBirth": "12/20/1980",
+        "emailAddresses": [
+            {
+                "value": "johnmiller@sit2.com",
+                "system": "EMAIL",
+                "use": null,
+                "rank": null,
+                "status": null,
+                "statusCode": null,
+                "valid": "active"
+            }
+        ],
+        "prescriptionforPatient": [
+            {
+                "isselected": true,
+                "id": "133225401",
+                "daysSupply": 90,
+                "quantity": 90,
+                "lastRefillDate": "2024-09-19",
+                "nextAutoRefillDate": null,
+                "nextFillDate": null,
+                "fulfilledBy": "HYVEE PHARMACY 1025",
+                "prescriptionLookupKey": "U2FsdGVkX1+o5yO1nQeLsrh/EFexf0jMpWLCtAT3ndF8sKENliJNKfmWH+7SOtWMPp1Rir8in4W3GE0Ve1+Rf/LP4sEGokztOmWXUb/WQZPOo4EjUxCHRdt3B0Upas2+AVjhZNe/WKssF4sS3sS8gxcasMS+bwEj3CALTy6Da4BgYtnyw+Db6XsXtf4avdMJi4HrsUfaCglr0tM4Yf9dqA==",
+                "storeNumber": null,
+                "storeDetails": null,
+                "drugInfo": {
+                    "drug": {
+                        "ndcId": "59148000813",
+                        "name": "ABILIFY 10MG TAB",
+                        "isMaintenance": null,
+                        "formName": "TAB",
+                        "formStrengthName": "10MG",
+                        "genericProductId": null
+                    }
+                },
+                "prescriber": {
+                    "npi": null,
+                    "firstName": "CPMSEBQ",
+                    "lastName": "BRADENIII",
+                    "identifier": null,
+                    "nameSuffix": null,
+                    "prescriberStatus": null,
+                    "type": null,
+                    "phone": "4920130462",
+                    "fax": "4920136825",
+                    "email": null,
+                    "address": {
+                        "line": [
+                            "5 LOVERS LANE"
+                        ],
+                        "city": "HILLIARD",
+                        "state": "OH",
+                        "postalCode": "43026"
+                    }
+                }
+            }
+        ]
+    }
+]
+
+
+component.ts
+
+import {
+  Component,
+  CUSTOM_ELEMENTS_SCHEMA,
+  inject,
+  Input
+} from '@angular/core';
+import { TransferPrescriptionsSubHeaderComponent } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/components';
+
+import { SubmitTransferStore } from './submit-transfer.store';
+import {
+  TransferOrderRequest,
+  ExternalTransfer,
+  Patient,
+  RxDetails,
+  Pharmacy,
+  Address,
+  DrugDetails,
+  PrescriptionLookupKey,
+  Provider
+} from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/submit-transfer';
+import { IPrescriptionDetails } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/current-prescriptions';
+
+@Component({
+  selector: 'lib-submit-transfer',
+  standalone: true,
+  imports: [TransferPrescriptionsSubHeaderComponent],
+  templateUrl: 'submit-transfer.component.html',
+  styleUrls: ['submit-transfer.component.scss'],
+  schemas: [CUSTOM_ELEMENTS_SCHEMA],
+  providers: [SubmitTransferStore],
+  host: { ngSkipHydration: 'true' }
+})
+export class SubmitTransferComponent {
+  @Input() public staticContent = {
+    continueBtnText: 'Continue'
+  };
+  protected readonly store = inject(SubmitTransferStore);
+  currentPrescriptions: IPrescriptionDetails[] | undefined;
+  private selectedPharmacy: any;
+
+  public submitTransfer(): void {
+    this.store.currentPrescriptions$.subscribe((data) => {
+      //console.log('pres', data);
+      //if (data) {
+      this.currentPrescriptions = data;
+      //}
+    });
+    const transferOrderRequest = this.buildTransferOrderRequest();
+    this.store.submitTransfer(transferOrderRequest);
+  }
+
+  private buildTransferOrderRequest(): TransferOrderRequest {
+    const externalTransfer: ExternalTransfer[] = this.currentPrescriptions?.length ? this.currentPrescriptions?.map(prescription => {
+      const rxDetails: RxDetails = this.mapRxDetails(prescription);
+      const patient: Patient = this.mapPatientDetails(prescription);
+      return {
+        requestedChannel: '',
+        carrierId: '',
+        clinicalRuleDate: '09/16/2024',
+        patient,
+        rxDetails: [rxDetails]
+      };
+    }): [];
+
+    return {
+      data: {
+        id: '737961639',
+        idType: 'PBM_QL_PARTICIPANT_ID_TYPE',
+        profile: null,
+        externalTransfer
+      }
+    };
+  }
+
+  private mapRxDetails(prescription: any): RxDetails {
+    const uniqueDrugDetails: DrugDetails[] = [];
+    const seenRxNumbers = new Set<string>();
+
+    prescription.prescriptionforPatient.forEach((drug: any) => {
+      if (!seenRxNumbers.has(drug.prescriptionLookupKey.rxNumber)) {
+        seenRxNumbers.add(drug.prescriptionLookupKey.rxNumber);
+
+        uniqueDrugDetails.push({
+          drugName: drug.drugInfo.drug.name,
+          encPrescriptionLookupKey: drug.prescriptionLookupKey,
+          prescriptionLookupKey: this.mapPrescriptionLookupKey(drug),
+          provider: this.mapProviderDetails(drug.prescriber),
+          recentFillDate: drug.recentFillDate,
+          quantity: drug.quantity,
+          daySupply: drug.daySupply
+        });
+      }
+    });
+
+    const fromPharmacy: Pharmacy = this.mapPharmacyDetails(prescription.fromPharmacy);
+    const toPharmacy: Pharmacy = this.mapPharmacyDetails(this.selectedPharmacy);
+
+    return {
+      drugDetails: uniqueDrugDetails,
+      fromPharmacy,
+      toPharmacy
+    };
+  }
+
+  private mapPatientDetails(prescription: any): Patient {
+    return {
+      firstName: prescription.patient.firstName,
+      lastName: prescription.patient.lastName,
+      gender: prescription.patient.gender,
+      dateOfBirth: prescription.patient.dateOfBirth,
+      memberId: prescription.patient.memberId,
+      patientId: prescription.patient.patientId,
+      patientIdType: 'PBM_QL_PARTICIPANT_ID_TYPE',
+      profileId: null,
+      email: prescription.patient.email,
+      address: this.mapAddressDetails(prescription.patient.address)
+    };
+  }
+
+  private mapPrescriptionLookupKey(drug: any): PrescriptionLookupKey {
+    return {
+      id: drug.id,
+      idType: 'PBM_QL_PARTICIPANT_ID_TYPE',
+      rxNumber: prescriptionLookupKey.rxNumber
+    };
+  }
+
+  private mapProviderDetails(provider: any): Provider {
+    return {
+      npi: provider.npi,
+      firstName: provider.firstName,
+      lastName: provider.lastName,
+      phoneNumber: provider.phoneNumber,
+      faxNumber: provider.faxNumber,
+      address: this.mapAddressDetails(provider.address)
+    };
+  }
+
+  private mapPharmacyDetails(pharmacy: any): Pharmacy {
+    return {
+      pharmacyName: pharmacy.pharmacyName,
+      address: this.mapAddressDetails(pharmacy.address),
+      storeId: pharmacy.storeId || '' // Optional, only for toPharmacy
+    };
+  }
+
+  private mapAddressDetails(address: any): Address {
+    return {
+      line: address.line,
+      city: address.city,
+      state: address.state,
+      postalCode: address.postalCode,
+      phoneNumber: address.phoneNumber
+    };
+  }
+}
