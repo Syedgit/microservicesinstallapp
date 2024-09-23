@@ -1,75 +1,3 @@
-[
-    {
-        "id": 7389902,
-        "idType": "PBM_QL_PARTICIPANT_ID_TYPE",
-        "memberType": "PBM_QL_PARTICIPANT_ID_TYPE",
-        "firstName": "john",
-        "lastName": "miller",
-        "personCode": "01",
-        "gender": "M",
-        "dateOfBirth": "12/20/1980",
-        "emailAddresses": [
-            {
-                "value": "johnmiller@sit2.com",
-                "system": "EMAIL",
-                "use": null,
-                "rank": null,
-                "status": null,
-                "statusCode": null,
-                "valid": "active"
-            }
-        ],
-        "prescriptionforPatient": [
-            {
-                "isselected": true,
-                "id": "133225401",
-                "daysSupply": 90,
-                "quantity": 90,
-                "lastRefillDate": "2024-09-19",
-                "nextAutoRefillDate": null,
-                "nextFillDate": null,
-                "fulfilledBy": "HYVEE PHARMACY 1025",
-                "prescriptionLookupKey": "U2FsdGVkX1+o5yO1nQeLsrh/EFexf0jMpWLCtAT3ndF8sKENliJNKfmWH+7SOtWMPp1Rir8in4W3GE0Ve1+Rf/LP4sEGokztOmWXUb/WQZPOo4EjUxCHRdt3B0Upas2+AVjhZNe/WKssF4sS3sS8gxcasMS+bwEj3CALTy6Da4BgYtnyw+Db6XsXtf4avdMJi4HrsUfaCglr0tM4Yf9dqA==",
-                "storeNumber": null,
-                "storeDetails": null,
-                "drugInfo": {
-                    "drug": {
-                        "ndcId": "59148000813",
-                        "name": "ABILIFY 10MG TAB",
-                        "isMaintenance": null,
-                        "formName": "TAB",
-                        "formStrengthName": "10MG",
-                        "genericProductId": null
-                    }
-                },
-                "prescriber": {
-                    "npi": null,
-                    "firstName": "CPMSEBQ",
-                    "lastName": "BRADENIII",
-                    "identifier": null,
-                    "nameSuffix": null,
-                    "prescriberStatus": null,
-                    "type": null,
-                    "phone": "4920130462",
-                    "fax": "4920136825",
-                    "email": null,
-                    "address": {
-                        "line": [
-                            "5 LOVERS LANE"
-                        ],
-                        "city": "HILLIARD",
-                        "state": "OH",
-                        "postalCode": "43026"
-                    }
-                }
-            }
-        ]
-    }
-]
-
-
-component.ts
-
 import {
   Component,
   CUSTOM_ELEMENTS_SCHEMA,
@@ -77,7 +5,6 @@ import {
   Input
 } from '@angular/core';
 import { TransferPrescriptionsSubHeaderComponent } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/components';
-
 import { SubmitTransferStore } from './submit-transfer.store';
 import {
   TransferOrderRequest,
@@ -112,31 +39,39 @@ export class SubmitTransferComponent {
 
   public submitTransfer(): void {
     this.store.currentPrescriptions$.subscribe((data) => {
-      //console.log('pres', data);
-      //if (data) {
       this.currentPrescriptions = data;
-      //}
     });
     const transferOrderRequest = this.buildTransferOrderRequest();
-    this.store.submitTransfer(transferOrderRequest);
+    if (transferOrderRequest.data.externalTransfer.length > 0) {
+      this.store.submitTransfer(transferOrderRequest);
+    } else {
+      console.warn('No prescriptions selected for transfer.');
+    }
   }
 
   private buildTransferOrderRequest(): TransferOrderRequest {
-    const externalTransfer: ExternalTransfer[] = this.currentPrescriptions?.length ? this.currentPrescriptions?.map(prescription => {
-      const rxDetails: RxDetails = this.mapRxDetails(prescription);
-      const patient: Patient = this.mapPatientDetails(prescription);
-      return {
-        requestedChannel: '',
-        carrierId: '',
-        clinicalRuleDate: '09/16/2024',
-        patient,
-        rxDetails: [rxDetails]
-      };
-    }): [];
+    const externalTransfer: ExternalTransfer[] = this.currentPrescriptions?.length
+      ? this.currentPrescriptions
+          .map(prescription => {
+            const rxDetails: RxDetails | null = this.mapRxDetails(prescription);
+            if (rxDetails && rxDetails.drugDetails.length > 0) {
+              const patient: Patient = this.mapPatientDetails(prescription);
+              return {
+                requestedChannel: '',
+                carrierId: '',
+                clinicalRuleDate: '09/16/2024',
+                patient,
+                rxDetails: [rxDetails]
+              };
+            }
+            return null; // Return null if no selected prescriptions
+          })
+          .filter((transfer): transfer is ExternalTransfer => transfer !== null) // Filter out null entries
+      : [];
 
     return {
       data: {
-        id: '737961639',
+        id: '737961639', // You might want to replace this with the actual ID logic
         idType: 'PBM_QL_PARTICIPANT_ID_TYPE',
         profile: null,
         externalTransfer
@@ -144,27 +79,38 @@ export class SubmitTransferComponent {
     };
   }
 
-  private mapRxDetails(prescription: any): RxDetails {
+  private mapRxDetails(prescription: any): RxDetails | null {
     const uniqueDrugDetails: DrugDetails[] = [];
     const seenRxNumbers = new Set<string>();
 
-    prescription.prescriptionforPatient.forEach((drug: any) => {
-      if (!seenRxNumbers.has(drug.prescriptionLookupKey.rxNumber)) {
-        seenRxNumbers.add(drug.prescriptionLookupKey.rxNumber);
+    prescription.prescriptionforPatient
+      .filter((drug: any) => drug.isselected) // Only include selected prescriptions
+      .forEach((drug: any) => {
+        if (!seenRxNumbers.has(drug.id)) {  // Assuming id as a unique identifier here
+          seenRxNumbers.add(drug.id);
 
-        uniqueDrugDetails.push({
-          drugName: drug.drugInfo.drug.name,
-          encPrescriptionLookupKey: drug.prescriptionLookupKey,
-          prescriptionLookupKey: this.mapPrescriptionLookupKey(drug),
-          provider: this.mapProviderDetails(drug.prescriber),
-          recentFillDate: drug.recentFillDate,
-          quantity: drug.quantity,
-          daySupply: drug.daySupply
-        });
-      }
-    });
+          uniqueDrugDetails.push({
+            drugName: drug.drugInfo.drug.name,
+            encPrescriptionLookupKey: drug.prescriptionLookupKey,  // Assuming this is a string
+            prescriptionLookupKey: this.mapPrescriptionLookupKey(drug),
+            provider: this.mapProviderDetails(drug.prescriber), // Mapping prescriber to provider
+            recentFillDate: drug.lastRefillDate,
+            quantity: drug.quantity,
+            daySupply: drug.daysSupply
+          });
+        }
+      });
 
-    const fromPharmacy: Pharmacy = this.mapPharmacyDetails(prescription.fromPharmacy);
+    if (uniqueDrugDetails.length === 0) {
+      return null; // Return null if there are no selected drug details
+    }
+
+    const fromPharmacy: Pharmacy = {
+      pharmacyName: prescription.fulfilledBy,  // Assuming fulfilledBy is the pharmacy name
+      address: this.mapAddressDetails(prescription.prescriber.address), // Prescriber's address used as fromPharmacy address
+      storeId: null  // Assuming no store ID for fromPharmacy
+    };
+
     const toPharmacy: Pharmacy = this.mapPharmacyDetails(this.selectedPharmacy);
 
     return {
@@ -176,35 +122,41 @@ export class SubmitTransferComponent {
 
   private mapPatientDetails(prescription: any): Patient {
     return {
-      firstName: prescription.patient.firstName,
-      lastName: prescription.patient.lastName,
-      gender: prescription.patient.gender,
-      dateOfBirth: prescription.patient.dateOfBirth,
-      memberId: prescription.patient.memberId,
-      patientId: prescription.patient.patientId,
+      firstName: prescription.firstName,
+      lastName: prescription.lastName,
+      gender: prescription.gender,
+      dateOfBirth: prescription.dateOfBirth,
+      memberId: prescription.id.toString(),  // Assuming id is the memberId
+      patientId: prescription.id.toString(),
       patientIdType: 'PBM_QL_PARTICIPANT_ID_TYPE',
       profileId: null,
-      email: prescription.patient.email,
-      address: this.mapAddressDetails(prescription.patient.address)
+      email: prescription.emailAddresses?.[0]?.value || '',
+      address: {
+        line: [''],
+        city: '',
+        state: '',
+        postalCode: '',
+        phoneNumber: ''
+      } // Assuming no detailed address info available in currentPrescriptions
     };
   }
 
   private mapPrescriptionLookupKey(drug: any): PrescriptionLookupKey {
     return {
-      id: drug.id,
+      id: drug.id,  // Assuming this is the unique identifier for the prescription
       idType: 'PBM_QL_PARTICIPANT_ID_TYPE',
-      rxNumber: prescriptionLookupKey.rxNumber
+      rxNumber: drug.prescriptionLookupKey  // Assuming this is the RX number
     };
   }
 
-  private mapProviderDetails(provider: any): Provider {
+  private mapProviderDetails(prescriber: any): Provider {
     return {
-      npi: provider.npi,
-      firstName: provider.firstName,
-      lastName: provider.lastName,
-      phoneNumber: provider.phoneNumber,
-      faxNumber: provider.faxNumber,
-      address: this.mapAddressDetails(provider.address)
+      npi: prescriber.npi || '',  // If npi is null, default to an empty string
+      firstName: prescriber.firstName,
+      lastName: prescriber.lastName,
+      phoneNumber: prescriber.phone,
+      faxNumber: prescriber.fax,
+      address: this.mapAddressDetails(prescriber.address)
     };
   }
 
