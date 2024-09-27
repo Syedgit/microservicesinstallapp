@@ -11,6 +11,8 @@ describe('SubmitTransferComponent', () => {
   let fixture: ComponentFixture<SubmitTransferComponent>;
   let store: SubmitTransferStore;
   let mockStore: MockStore;
+  let currentPrescriptions: any[];
+
   const initialState = {
     config: {
       loading: false,
@@ -32,253 +34,10 @@ describe('SubmitTransferComponent', () => {
     component = fixture.componentInstance;
     store = TestBed.inject(SubmitTransferStore);
     mockStore = TestBed.inject(MockStore);
-    fixture.detectChanges();
-  });
 
-  it('should create the component', () => {
-    expect(component).toBeTruthy();
-  });
-
-  describe('submitTransfer', () => {
-    it('should handle a successful transfer submission', () => {
-      const spySubmitTransfer = jest
-        .spyOn(store, 'submitTransfer')
-        .mockReturnValue(of({}));
-
-      component.currentPrescriptions = [
-        {
-          id: 7389902,
-          prescriptionforPatient: [
-            {
-              isselected: true,
-              id: '133225401',
-              drugInfo: {
-                drug: {
-                  name: 'Drug 1'
-                }
-              },
-              prescriptionLookupKey: 'lookupKey1',
-              prescriber: {
-                firstName: 'John',
-                lastName: 'Doe',
-                address: {
-                  line: ['123 Main St'],
-                  city: 'Town',
-                  state: 'CA',
-                  postalCode: '90210',
-                  phoneNumber: '123-456-7890'
-                }
-              },
-              storeDetails: {
-                pharmacyName: 'Pharmacy 1',
-                address: {
-                  line: ['456 Other St'],
-                  city: 'City',
-                  state: 'CA',
-                  postalCode: '90210',
-                  phoneNumber: '987-654-3210'
-                }
-              }
-            }
-          ]
-        }
-      ];
-      component.submitTransfer();
-      expect(spySubmitTransfer).toHaveBeenCalled();
-      expect(component.errorMessage).toBeNull();
-    });
-
-    it('should handle a failed transfer submission', () => {
-      const spySubmitTransfer = jest
-        .spyOn(store, 'submitTransfer')
-        .mockReturnValue(throwError('Error occurred'));
-
-      component.currentPrescriptions = [
-        {
-          id: 7389902,
-          prescriptionforPatient: [
-            {
-              isselected: true,
-              id: '133225401',
-              drugInfo: {
-                drug: {
-                  name: 'Drug 1'
-                }
-              },
-              prescriptionLookupKey: 'lookupKey1',
-              prescriber: {
-                firstName: 'John',
-                lastName: 'Doe',
-                address: {
-                  line: ['123 Main St'],
-                  city: 'Town',
-                  state: 'CA',
-                  postalCode: '90210',
-                  phoneNumber: '123-456-7890'
-                }
-              },
-              storeDetails: {
-                pharmacyName: 'Pharmacy 1',
-                address: {
-                  line: ['456 Other St'],
-                  city: 'City',
-                  state: 'CA',
-                  postalCode: '90210',
-                  phoneNumber: '987-654-3210'
-                }
-              }
-            }
-          ]
-        }
-      ];
-      component.submitTransfer();
-      expect(spySubmitTransfer).toHaveBeenCalled();
-      expect(component.errorMessage).toBe(
-        'An error occurred while submitting the transfer request. Please try again later.'
-      );
-    });
-
-    it('should warn if no prescriptions are selected', () => {
-      component.currentPrescriptions = [
-        {
-          id: 7389902,
-          prescriptionforPatient: [
-            {
-              isselected: false,
-              id: '133225401',
-              drugInfo: {
-                drug: {
-                  name: 'Drug 1'
-                }
-              },
-              prescriptionLookupKey: 'lookupKey1',
-              prescriber: {
-                firstName: 'John',
-                lastName: 'Doe',
-                address: {
-                  line: ['123 Main St'],
-                  city: 'Town',
-                  state: 'CA',
-                  postalCode: '90210',
-                  phoneNumber: '123-456-7890'
-                }
-              },
-              storeDetails: {
-                pharmacyName: 'Pharmacy 1',
-                address: {
-                  line: ['456 Other St'],
-                  city: 'City',
-                  state: 'CA',
-                  postalCode: '90210',
-                  phoneNumber: '987-654-3210'
-                }
-              }
-            }
-          ]
-        }
-      ];
-      component.submitTransfer();
-      expect(component.errorMessage).toBe(
-        'No prescriptions selected for transfer.'
-      );
-    });
-  });
-
-  describe('buildTransferOrderRequest', () => {
-    it('should build the transfer order request correctly', () => {
-      component.currentPrescriptions = [
-        {
-          id: 7389902,
-          prescriptionforPatient: [
-            {
-              isselected: true,
-              id: '133225401',
-              drugInfo: {
-                drug: {
-                  name: 'Drug 1'
-                }
-              },
-              prescriptionLookupKey: 'lookupKey1',
-              prescriber: {
-                firstName: 'John',
-                lastName: 'Doe',
-                address: {
-                  line: ['123 Main St'],
-                  city: 'Town',
-                  state: 'CA',
-                  postalCode: '90210',
-                  phoneNumber: '123-456-7890'
-                }
-              },
-              storeDetails: {
-                pharmacyName: 'Pharmacy 1',
-                address: {
-                  line: ['456 Other St'],
-                  city: 'City',
-                  state: 'CA',
-                  postalCode: '90210',
-                  phoneNumber: '987-654-3210'
-                }
-              }
-            }
-          ]
-        }
-      ];
-
-      const request = component.buildTransferOrderRequest();
-      expect(request.data.externalTransfer.length).toBe(1);
-      expect(request.data.externalTransfer[0].patient.firstName).toBe('John');
-      expect(request.data.externalTransfer[0].rxDetails[0].fromPharmacy.pharmacyName).toBe('Pharmacy 1');
-    });
-
-    it('should return empty externalTransfer array if no prescriptions are selected', () => {
-      component.currentPrescriptions = [
-        {
-          id: 7389902,
-          prescriptionforPatient: [
-            {
-              isselected: false,
-              id: '133225401',
-              drugInfo: {
-                drug: {
-                  name: 'Drug 1'
-                }
-              },
-              prescriptionLookupKey: 'lookupKey1',
-              prescriber: {
-                firstName: 'John',
-                lastName: 'Doe',
-                address: {
-                  line: ['123 Main St'],
-                  city: 'Town',
-                  state: 'CA',
-                  postalCode: '90210',
-                  phoneNumber: '123-456-7890'
-                }
-              },
-              storeDetails: {
-                pharmacyName: 'Pharmacy 1',
-                address: {
-                  line: ['456 Other St'],
-                  city: 'City',
-                  state: 'CA',
-                  postalCode: '90210',
-                  phoneNumber: '987-654-3210'
-                }
-              }
-            }
-          ]
-        }
-      ];
-
-      const request = component.buildTransferOrderRequest();
-      expect(request.data.externalTransfer.length).toBe(0);
-    });
-  });
-
-  describe('mapRxDetails', () => {
-    it('should map the prescription details correctly', () => {
-      const prescription = {
+    currentPrescriptions = [
+      {
+        id: 7389902,
         prescriptionforPatient: [
           {
             isselected: true,
@@ -312,7 +71,74 @@ describe('SubmitTransferComponent', () => {
             }
           }
         ]
-      };
+      }
+    ];
+
+    fixture.detectChanges();
+  });
+
+  it('should create the component', () => {
+    expect(component).toBeTruthy();
+  });
+
+  describe('submitTransfer', () => {
+    it('should handle a successful transfer submission', () => {
+      const spySubmitTransfer = jest
+        .spyOn(store, 'submitTransfer')
+        .mockReturnValue(of({}));
+
+      component.currentPrescriptions = currentPrescriptions;
+      component.submitTransfer();
+      expect(spySubmitTransfer).toHaveBeenCalled();
+      expect(component.errorMessage).toBeNull();
+    });
+
+    it('should handle a failed transfer submission', () => {
+      const spySubmitTransfer = jest
+        .spyOn(store, 'submitTransfer')
+        .mockReturnValue(throwError('Error occurred'));
+
+      component.currentPrescriptions = currentPrescriptions;
+      component.submitTransfer();
+      expect(spySubmitTransfer).toHaveBeenCalled();
+      expect(component.errorMessage).toBe(
+        'An error occurred while submitting the transfer request. Please try again later.'
+      );
+    });
+
+    it('should warn if no prescriptions are selected', () => {
+      currentPrescriptions[0].prescriptionforPatient[0].isselected = false;
+
+      component.currentPrescriptions = currentPrescriptions;
+      component.submitTransfer();
+      expect(component.errorMessage).toBe(
+        'No prescriptions selected for transfer.'
+      );
+    });
+  });
+
+  describe('buildTransferOrderRequest', () => {
+    it('should build the transfer order request correctly', () => {
+      component.currentPrescriptions = currentPrescriptions;
+
+      const request = component.buildTransferOrderRequest();
+      expect(request.data.externalTransfer.length).toBe(1);
+      expect(request.data.externalTransfer[0].patient.firstName).toBe('John');
+      expect(request.data.externalTransfer[0].rxDetails[0].fromPharmacy.pharmacyName).toBe('Pharmacy 1');
+    });
+
+    it('should return empty externalTransfer array if no prescriptions are selected', () => {
+      currentPrescriptions[0].prescriptionforPatient[0].isselected = false;
+
+      component.currentPrescriptions = currentPrescriptions;
+      const request = component.buildTransferOrderRequest();
+      expect(request.data.externalTransfer.length).toBe(0);
+    });
+  });
+
+  describe('mapRxDetails', () => {
+    it('should map the prescription details correctly', () => {
+      const prescription = currentPrescriptions[0];
 
       const result = component.mapRxDetails(prescription);
       expect(result?.drugDetails.length).toBe(1);
@@ -320,42 +146,9 @@ describe('SubmitTransferComponent', () => {
     });
 
     it('should return null if no selected prescriptions', () => {
-      const prescription = {
-        prescriptionforPatient: [
-          {
-            isselected: false,
-            id: '133225401',
-            drugInfo: {
-              drug: {
-                name: 'Drug 1'
-              }
-            },
-            prescriptionLookupKey: 'lookupKey1',
-            prescriber: {
-              firstName: 'John',
-              lastName: 'Doe',
-              address: {
-                line: ['123 Main St'],
-                city: 'Town',
-                state: 'CA',
-                postalCode: '90210',
-                phoneNumber: '123-456-7890'
-              }
-            },
-            storeDetails: {
-              pharmacyName: 'Pharmacy 1',
-              address: {
-                line: ['456 Other St'],
-                city: 'City',
-                state: 'CA',
-                postalCode: '90210',
-                phoneNumber: '987-654-3210'
-              }
-            }
-          }
-        ]
-      };
+      currentPrescriptions[0].prescriptionforPatient[0].isselected = false;
 
+      const prescription = currentPrescriptions[0];
       const result = component.mapRxDetails(prescription);
       expect(result).toBeNull();
     });
@@ -363,14 +156,7 @@ describe('SubmitTransferComponent', () => {
 
   describe('mapPatientDetails', () => {
     it('should map the patient details correctly', () => {
-      const prescription = {
-        id: 7389902,
-        firstName: 'John',
-        lastName: 'Doe',
-        gender: 'M',
-        dateOfBirth: '1980-01-01',
-        emailAddresses: [{ value: 'john.doe@example.com' }]
-      };
+      const prescription = currentPrescriptions[0];
 
       const result = component.mapPatientDetails(prescription);
       expect(result.firstName).toBe('John');
@@ -378,15 +164,9 @@ describe('SubmitTransferComponent', () => {
     });
 
     it('should handle missing email addresses', () => {
-      const prescription = {
-        id: 7389902,
-        firstName: 'John',
-        lastName: 'Doe',
-        gender: 'M',
-        dateOfBirth: '1980-01-01',
-        emailAddresses: []
-      };
+      currentPrescriptions[0].emailAddresses = [];
 
+      const prescription = currentPrescriptions[0];
       const result = component.mapPatientDetails(prescription);
       expect(result.email).toBe('');
     });
