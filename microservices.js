@@ -1,22 +1,16 @@
 import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import {
-  CurrentPrescriptionsService,
-  getPrescriptionsForTransferResponse
-} from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/current-prescriptions';
-import { EffectsModule } from '@ngrx/effects';
-import { StoreModule } from '@ngrx/store';
-import { provideMockStore } from '@ngrx/store/testing';
+import { provideMockStore, MockStore } from '@ngrx/store/testing';
+import { of, throwError } from 'rxjs';
+import { SubmitTransferComponent } from './submit-transfer.component';
+import { SubmitTransferStore } from './submit-transfer.store';
+import { TransferOrderRequest } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/submit-transfer';
 
-import { CurrentPrescriptionsComponent } from './current-prescriptions.component';
-import { CurrentPrescriptionsStore } from './current-prescriptions.store';
-
-describe('CurrentPrescriptionsComponent', () => {
-  let component: CurrentPrescriptionsComponent;
-  let fixture: ComponentFixture<CurrentPrescriptionsComponent>;
-  let service: CurrentPrescriptionsService;
-  let store: CurrentPrescriptionsStore;
-
+describe('SubmitTransferComponent', () => {
+  let component: SubmitTransferComponent;
+  let fixture: ComponentFixture<SubmitTransferComponent>;
+  let store: SubmitTransferStore;
+  let mockStore: MockStore;
   const initialState = {
     config: {
       loading: false,
@@ -26,261 +20,375 @@ describe('CurrentPrescriptionsComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [
-        HttpClientTestingModule,
-        StoreModule.forRoot(),
-        EffectsModule.forRoot()
-      ],
+      imports: [HttpClientTestingModule],
       providers: [
-        CurrentPrescriptionsStore,
-        CurrentPrescriptionsService,
+        SubmitTransferStore,
         provideMockStore({ initialState })
-      ]
+      ],
+      declarations: [SubmitTransferComponent]
     }).compileComponents();
 
-    service = TestBed.inject(CurrentPrescriptionsService);
-    store = TestBed.inject(CurrentPrescriptionsStore);
-    fixture = TestBed.createComponent(CurrentPrescriptionsComponent);
+    fixture = TestBed.createComponent(SubmitTransferComponent);
     component = fixture.componentInstance;
+    store = TestBed.inject(SubmitTransferStore);
+    mockStore = TestBed.inject(MockStore);
     fixture.detectChanges();
   });
 
-  it('should create', () => {
+  it('should create the component', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should initialize select prescription form', () => {
-    const mockApiResponse =
-      service.constructMemberDetailsFromGetPrescriptionResponse(
-        getPrescriptionsForTransferResponse.data.getLinkedMemberPatients
-      );
+  describe('submitTransfer', () => {
+    it('should handle a successful transfer submission', () => {
+      const spySubmitTransfer = jest
+        .spyOn(store, 'submitTransfer')
+        .mockReturnValue(of({}));
 
-    component.initializeSelectPrescriptionForm(mockApiResponse);
-    expect(component.formatedPrescriptionResponse).toEqual(mockApiResponse);
-    expect(component.selectPrescriptionForm).toBeTruthy();
-  });
-
-  it('should set value for respective form value on user selection', () => {
-    const mockApiResponse =
-      service.constructMemberDetailsFromGetPrescriptionResponse(
-        getPrescriptionsForTransferResponse.data.getLinkedMemberPatients
-      );
-    const event = {
-      target: {
-        checked: true
-      }
-    } as unknown as Event;
-    const personCode = mockApiResponse[0].personCode;
-    const prescriptionName: string =
-      mockApiResponse[0].prescriptionforPatient[0].id;
-
-    component.initializeSelectPrescriptionForm(mockApiResponse);
-    component.onCheckboxSelect(event, personCode, prescriptionName);
-    expect(
-      component.selectPrescriptionForm
-        ?.get(`user_${personCode}`)
-        ?.get(prescriptionName)?.value
-    ).toEqual(true);
-  });
-
-  it('verify is all prescriptions checked', () => {
-    const mockApiResponse =
-      service.constructMemberDetailsFromGetPrescriptionResponse(
-        getPrescriptionsForTransferResponse.data.getLinkedMemberPatients
-      );
-    const selectedPrescription = mockApiResponse[0].prescriptionforPatient;
-
-    component.initializeSelectPrescriptionForm(mockApiResponse);
-    const isAllPrescriptionSelected =
-      component.isAllPrescriptionSelected(selectedPrescription);
-
-    expect(isAllPrescriptionSelected).toEqual(false);
-  });
-
-  it('verify is all prescriptions checked with undefined', () => {
-    const isAllPrescriptionSelected =
-      component.isAllPrescriptionSelected(undefined);
-
-    expect(isAllPrescriptionSelected).toEqual(false);
-  });
-
-  it('verify is all prescriptions if isselected flag is not available', () => {
-    const nonIsSelectFlag = [] as unknown as any;
-    const isAllPrescriptionSelected =
-      component.isAllPrescriptionSelected(nonIsSelectFlag);
-
-    expect(isAllPrescriptionSelected).toEqual(false);
-  });
-
-  it('should select or unselect all prescription on select all selection', () => {
-    const spy = jest.spyOn(store, 'updatePrescriptionSelection');
-    const mockApiResponse =
-      service.constructMemberDetailsFromGetPrescriptionResponse(
-        getPrescriptionsForTransferResponse.data.getLinkedMemberPatients
-      );
-    const event = {
-      target: {
-        checked: true
-      }
-    } as unknown as Event;
-    const personCode = mockApiResponse[0].personCode;
-
-    component.initializeSelectPrescriptionForm(mockApiResponse);
-    component.onChangeSelectAll(event, personCode);
-    store.updatePrescriptionSelection(mockApiResponse);
-    expect(spy).toHaveBeenCalledWith(mockApiResponse);
-  });
-
-  it('should call on change select all with undefined prescriptions ', () => {
-    const spy = jest.spyOn(component, 'onChangeSelectAll');
-    const mockApiResponse =
-      service.constructMemberDetailsFromGetPrescriptionResponse(
-        getPrescriptionsForTransferResponse.data.getLinkedMemberPatients
-      );
-    const event = {
-      target: {
-        checked: true
-      }
-    } as unknown as Event;
-    const personCode = mockApiResponse[0].personCode;
-
-    component.initializeSelectPrescriptionForm(mockApiResponse);
-    component.onChangeSelectAll(event, personCode);
-    expect(spy).toHaveBeenCalled();
-  });
-  it('should call on change select all with empty member object', () => {
-    const spy = jest.spyOn(component, 'onChangeSelectAll');
-    const mockApiResponse =
-      service.constructMemberDetailsFromGetPrescriptionResponse(
-        getPrescriptionsForTransferResponse.data.getLinkedMemberPatients
-      );
-    const event = {
-      target: {
-        checked: true
-      }
-    } as unknown as Event;
-    const personCode = mockApiResponse[0].personCode;
-
-    component.initializeSelectPrescriptionForm(mockApiResponse);
-    component.onChangeSelectAll(event, personCode);
-    expect(spy).toHaveBeenCalled();
-  });
-
-  it('should call initialize Select Prescription Form with null value', () => {
-    const spy = jest.spyOn(component, 'initializeSelectPrescriptionForm');
-
-    component.initializeSelectPrescriptionForm([null] as any);
-    expect(spy).toHaveBeenCalled();
-  });
-
-  it('should call initialize Select Prescription Form with prescriptions null value', () => {
-    const spy = jest.spyOn(component, 'initializeSelectPrescriptionForm');
-    let mockApiResponse =
-      service.constructMemberDetailsFromGetPrescriptionResponse(
-        getPrescriptionsForTransferResponse.data.getLinkedMemberPatients
-      );
-
-    mockApiResponse = mockApiResponse.map((memberDetails) => ({
-      ...memberDetails,
-      prescriptionforPatient: null as any
-    }));
-    component.initializeSelectPrescriptionForm(mockApiResponse);
-    expect(spy).toHaveBeenCalled();
-  });
-
-  it('should call initialize Select Prescription Form with prescriptions [null] value', () => {
-    const spy = jest.spyOn(component, 'initializeSelectPrescriptionForm');
-    let mockApiResponse =
-      service.constructMemberDetailsFromGetPrescriptionResponse(
-        getPrescriptionsForTransferResponse.data.getLinkedMemberPatients
-      );
-
-    mockApiResponse = mockApiResponse.map((memberDetails) => ({
-      ...memberDetails,
-      prescriptionforPatient: [null] as any
-    }));
-    component.initializeSelectPrescriptionForm(mockApiResponse);
-    expect(spy).toHaveBeenCalled();
-  });
-
-  it('should verify noPrescriptionSelected as false', () => {
-    const mockApiResponse =
-      service.constructMemberDetailsFromGetPrescriptionResponse(
-        getPrescriptionsForTransferResponse.data.getLinkedMemberPatients
-      );
-
-    component.formatedPrescriptionResponse = mockApiResponse;
-    component.selectPrescriptionForm = component.formBuilder.group({
-      user_001: component.formBuilder.group({
-        selectAll_001: true
-      })
+      component.currentPrescriptions = [
+        {
+          id: 7389902,
+          prescriptionforPatient: [
+            {
+              isselected: true,
+              id: '133225401',
+              drugInfo: {
+                drug: {
+                  name: 'Drug 1'
+                }
+              },
+              prescriptionLookupKey: 'lookupKey1',
+              prescriber: {
+                firstName: 'John',
+                lastName: 'Doe',
+                address: {
+                  line: ['123 Main St'],
+                  city: 'Town',
+                  state: 'CA',
+                  postalCode: '90210',
+                  phoneNumber: '123-456-7890'
+                }
+              },
+              storeDetails: {
+                pharmacyName: 'Pharmacy 1',
+                address: {
+                  line: ['456 Other St'],
+                  city: 'City',
+                  state: 'CA',
+                  postalCode: '90210',
+                  phoneNumber: '987-654-3210'
+                }
+              }
+            }
+          ]
+        }
+      ];
+      component.submitTransfer();
+      expect(spySubmitTransfer).toHaveBeenCalled();
+      expect(component.errorMessage).toBeNull();
     });
 
-    component.onSubmit();
-    expect(component.noPrescriptionSelected).toEqual(false);
-  });
-  it('should verify noPrescriptionSelected as true', () => {
-    component.selectPrescriptionForm = component.formBuilder.group({
-      user_001: component.formBuilder.group({
-        selectAll_001: false
-      })
+    it('should handle a failed transfer submission', () => {
+      const spySubmitTransfer = jest
+        .spyOn(store, 'submitTransfer')
+        .mockReturnValue(throwError('Error occurred'));
+
+      component.currentPrescriptions = [
+        {
+          id: 7389902,
+          prescriptionforPatient: [
+            {
+              isselected: true,
+              id: '133225401',
+              drugInfo: {
+                drug: {
+                  name: 'Drug 1'
+                }
+              },
+              prescriptionLookupKey: 'lookupKey1',
+              prescriber: {
+                firstName: 'John',
+                lastName: 'Doe',
+                address: {
+                  line: ['123 Main St'],
+                  city: 'Town',
+                  state: 'CA',
+                  postalCode: '90210',
+                  phoneNumber: '123-456-7890'
+                }
+              },
+              storeDetails: {
+                pharmacyName: 'Pharmacy 1',
+                address: {
+                  line: ['456 Other St'],
+                  city: 'City',
+                  state: 'CA',
+                  postalCode: '90210',
+                  phoneNumber: '987-654-3210'
+                }
+              }
+            }
+          ]
+        }
+      ];
+      component.submitTransfer();
+      expect(spySubmitTransfer).toHaveBeenCalled();
+      expect(component.errorMessage).toBe(
+        'An error occurred while submitting the transfer request. Please try again later.'
+      );
     });
 
-    component.onSubmit();
-    expect(component.noPrescriptionSelected).toEqual(true);
-  });
-
-  it('should listen to current prescriptions state parameter', () => {
-    const spy = jest.spyOn(component, 'initCurrentPrescriptions');
-
-    component.listenToCurrentPrescriptions();
-    store.currentPrescriptions$.subscribe(() => {
-      expect(spy).toHaveBeenCalled();
+    it('should warn if no prescriptions are selected', () => {
+      component.currentPrescriptions = [
+        {
+          id: 7389902,
+          prescriptionforPatient: [
+            {
+              isselected: false,
+              id: '133225401',
+              drugInfo: {
+                drug: {
+                  name: 'Drug 1'
+                }
+              },
+              prescriptionLookupKey: 'lookupKey1',
+              prescriber: {
+                firstName: 'John',
+                lastName: 'Doe',
+                address: {
+                  line: ['123 Main St'],
+                  city: 'Town',
+                  state: 'CA',
+                  postalCode: '90210',
+                  phoneNumber: '123-456-7890'
+                }
+              },
+              storeDetails: {
+                pharmacyName: 'Pharmacy 1',
+                address: {
+                  line: ['456 Other St'],
+                  city: 'City',
+                  state: 'CA',
+                  postalCode: '90210',
+                  phoneNumber: '987-654-3210'
+                }
+              }
+            }
+          ]
+        }
+      ];
+      component.submitTransfer();
+      expect(component.errorMessage).toBe(
+        'No prescriptions selected for transfer.'
+      );
     });
   });
 
-  it('should set current prescription rehydrate as empty array', () => {
-    const spy1 = jest.spyOn(component, 'listenToCurrentPrescriptions');
+  describe('buildTransferOrderRequest', () => {
+    it('should build the transfer order request correctly', () => {
+      component.currentPrescriptions = [
+        {
+          id: 7389902,
+          prescriptionforPatient: [
+            {
+              isselected: true,
+              id: '133225401',
+              drugInfo: {
+                drug: {
+                  name: 'Drug 1'
+                }
+              },
+              prescriptionLookupKey: 'lookupKey1',
+              prescriber: {
+                firstName: 'John',
+                lastName: 'Doe',
+                address: {
+                  line: ['123 Main St'],
+                  city: 'Town',
+                  state: 'CA',
+                  postalCode: '90210',
+                  phoneNumber: '123-456-7890'
+                }
+              },
+              storeDetails: {
+                pharmacyName: 'Pharmacy 1',
+                address: {
+                  line: ['456 Other St'],
+                  city: 'City',
+                  state: 'CA',
+                  postalCode: '90210',
+                  phoneNumber: '987-654-3210'
+                }
+              }
+            }
+          ]
+        }
+      ];
 
-    component.ngOnInit();
-
-    expect(spy1).toHaveBeenCalled();
-  });
-
-  it('should listen to init prescriptions with data', () => {
-    const spy1 = jest.spyOn(component, 'initializeSelectPrescriptionForm');
-    const mockApiResponse =
-      service.constructMemberDetailsFromGetPrescriptionResponse(
-        getPrescriptionsForTransferResponse.data.getLinkedMemberPatients
-      );
-
-    component.initCurrentPrescriptions(mockApiResponse);
-
-    expect(spy1).toHaveBeenCalled();
-  });
-
-  it('should listen to init prescriptions with no data', () => {
-    const spy1 = jest.spyOn(component, 'initializeSelectPrescriptionForm');
-
-    component.initCurrentPrescriptions([]);
-
-    expect(spy1).not.toHaveBeenCalled();
-  });
-
-  it('should make already transferred flag to true', () => {
-    let mockApiResponse =
-      service.constructMemberDetailsFromGetPrescriptionResponse(
-        getPrescriptionsForTransferResponse.data.getLinkedMemberPatients
-      );
-
-    mockApiResponse = mockApiResponse.map((data) => {
-      data.prescriptionforPatient = [];
-
-      return data;
+      const request = component.buildTransferOrderRequest();
+      expect(request.data.externalTransfer.length).toBe(1);
+      expect(request.data.externalTransfer[0].patient.firstName).toBe('John');
+      expect(request.data.externalTransfer[0].rxDetails[0].fromPharmacy.pharmacyName).toBe('Pharmacy 1');
     });
 
-    component.initCurrentPrescriptions(mockApiResponse);
+    it('should return empty externalTransfer array if no prescriptions are selected', () => {
+      component.currentPrescriptions = [
+        {
+          id: 7389902,
+          prescriptionforPatient: [
+            {
+              isselected: false,
+              id: '133225401',
+              drugInfo: {
+                drug: {
+                  name: 'Drug 1'
+                }
+              },
+              prescriptionLookupKey: 'lookupKey1',
+              prescriber: {
+                firstName: 'John',
+                lastName: 'Doe',
+                address: {
+                  line: ['123 Main St'],
+                  city: 'Town',
+                  state: 'CA',
+                  postalCode: '90210',
+                  phoneNumber: '123-456-7890'
+                }
+              },
+              storeDetails: {
+                pharmacyName: 'Pharmacy 1',
+                address: {
+                  line: ['456 Other St'],
+                  city: 'City',
+                  state: 'CA',
+                  postalCode: '90210',
+                  phoneNumber: '987-654-3210'
+                }
+              }
+            }
+          ]
+        }
+      ];
 
-    expect(component.prescriptionsAlreadyTransferred).toEqual(true);
+      const request = component.buildTransferOrderRequest();
+      expect(request.data.externalTransfer.length).toBe(0);
+    });
+  });
+
+  describe('mapRxDetails', () => {
+    it('should map the prescription details correctly', () => {
+      const prescription = {
+        prescriptionforPatient: [
+          {
+            isselected: true,
+            id: '133225401',
+            drugInfo: {
+              drug: {
+                name: 'Drug 1'
+              }
+            },
+            prescriptionLookupKey: 'lookupKey1',
+            prescriber: {
+              firstName: 'John',
+              lastName: 'Doe',
+              address: {
+                line: ['123 Main St'],
+                city: 'Town',
+                state: 'CA',
+                postalCode: '90210',
+                phoneNumber: '123-456-7890'
+              }
+            },
+            storeDetails: {
+              pharmacyName: 'Pharmacy 1',
+              address: {
+                line: ['456 Other St'],
+                city: 'City',
+                state: 'CA',
+                postalCode: '90210',
+                phoneNumber: '987-654-3210'
+              }
+            }
+          }
+        ]
+      };
+
+      const result = component.mapRxDetails(prescription);
+      expect(result?.drugDetails.length).toBe(1);
+      expect(result?.fromPharmacy.pharmacyName).toBe('Pharmacy 1');
+    });
+
+    it('should return null if no selected prescriptions', () => {
+      const prescription = {
+        prescriptionforPatient: [
+          {
+            isselected: false,
+            id: '133225401',
+            drugInfo: {
+              drug: {
+                name: 'Drug 1'
+              }
+            },
+            prescriptionLookupKey: 'lookupKey1',
+            prescriber: {
+              firstName: 'John',
+              lastName: 'Doe',
+              address: {
+                line: ['123 Main St'],
+                city: 'Town',
+                state: 'CA',
+                postalCode: '90210',
+                phoneNumber: '123-456-7890'
+              }
+            },
+            storeDetails: {
+              pharmacyName: 'Pharmacy 1',
+              address: {
+                line: ['456 Other St'],
+                city: 'City',
+                state: 'CA',
+                postalCode: '90210',
+                phoneNumber: '987-654-3210'
+              }
+            }
+          }
+        ]
+      };
+
+      const result = component.mapRxDetails(prescription);
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('mapPatientDetails', () => {
+    it('should map the patient details correctly', () => {
+      const prescription = {
+        id: 7389902,
+        firstName: 'John',
+        lastName: 'Doe',
+        gender: 'M',
+        dateOfBirth: '1980-01-01',
+        emailAddresses: [{ value: 'john.doe@example.com' }]
+      };
+
+      const result = component.mapPatientDetails(prescription);
+      expect(result.firstName).toBe('John');
+      expect(result.email).toBe('john.doe@example.com');
+    });
+
+    it('should handle missing email addresses', () => {
+      const prescription = {
+        id: 7389902,
+        firstName: 'John',
+        lastName: 'Doe',
+        gender: 'M',
+        dateOfBirth: '1980-01-01',
+        emailAddresses: []
+      };
+
+      const result = component.mapPatientDetails(prescription);
+      expect(result.email).toBe('');
+    });
   });
 });
