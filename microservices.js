@@ -195,3 +195,33 @@ export class SubmitTransferComponent {
     };
   }
 }
+
+
+
+
+
+import { Injectable, inject } from '@angular/core';
+import { CurrentPrescriptionsFacade, IPrescriptionDetails } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/current-prescriptions';
+import { PrescriptionsListFacade, SubmitTransferResponse } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/prescriptions-list';
+import { Observable } from 'rxjs';
+
+@Injectable()
+export class SubmitTransferStore {
+  protected readonly submitTransferFacade = inject(PrescriptionsListFacade);
+  protected readonly currentPrescriptionsFacade = inject(CurrentPrescriptionsFacade);
+
+  public readonly currentPrescriptions$: Observable<IPrescriptionDetails[] | undefined> =
+    this.currentPrescriptionsFacade.currentPrescriptions$;
+  
+  public readonly loading$: Observable<boolean> = this.submitTransferFacade.loading$;
+  
+  public readonly error$: Observable<unknown> = this.submitTransferFacade.error$;
+  
+  public readonly submitTransferResponse$: Observable<SubmitTransferResponse | null> =
+    this.submitTransferFacade.submitTransferResponse$;
+  
+  public submitTransfer(req: any): void {
+    this.submitTransferFacade.submitTransfer(req);
+  }
+}
+
