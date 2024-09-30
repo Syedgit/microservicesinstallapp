@@ -31,32 +31,45 @@ export class SubmitTransferComponent {
     continueBtnText: 'Continue'
   };
 
-  protected readonly store = inject(SubmitTransferStore);
+  // Public variable to store current prescriptions
+  public currentPrescriptions: IPrescriptionDetails[] | undefined;
   public errorMessage: string | null = null;
+
+  protected readonly store = inject(SubmitTransferStore);
 
   constructor(private ngrxStore: Store) {}
 
+  // Method to handle the submission of the transfer order
   public submitTransfer(): void {
+    // Selecting 'currentPrescriptions' from the store
     this.ngrxStore.select('currentPrescriptions').pipe(
+      // Using switchMap to handle the currentPrescriptions and continue the observable chain
       switchMap((data: IPrescriptionDetails[]) => {
-        const transferOrderRequest = this.buildTransferOrderRequest(data);
-        
-        if (transferOrderRequest.data.externalTransfer.length > 0) {
+        // Assigning the fetched data to the public variable `this.currentPrescriptions`
+        this.currentPrescriptions = data;
+
+        // Check if `currentPrescriptions` has a valid length
+        if (this.currentPrescriptions && this.currentPrescriptions.length > 0) {
+          const transferOrderRequest = this.buildTransferOrderRequest(this.currentPrescriptions);
+          
+          // Return the transfer request observable if there are prescriptions
           return this.store.submitTransfer(transferOrderRequest).pipe(
             tap(() => this.handleSuccess()), // Handle success
             catchError((error) => {
               this.handleError(error); // Handle error
-              return of(null); // Handle error case
+              return of(null); // Return null in case of error
             })
           );
         } else {
+          // No prescriptions selected for transfer
           this.errorMessage = 'No prescriptions selected for transfer.';
-          return of(null); // No prescriptions, no submission
+          return of(null); // Return null if no prescriptions
         }
       })
     ).subscribe();
   }
 
+  // Method to build the transfer order request
   private buildTransferOrderRequest(currentPrescriptions: IPrescriptionDetails[]): TransferOrderRequest {
     const externalTransfer: ExternalTransfer[] = currentPrescriptions?.length
       ? currentPrescriptions
@@ -87,16 +100,19 @@ export class SubmitTransferComponent {
     };
   }
 
+  // Method to handle errors
   private handleError(error: any): void {
     console.error('An error occurred:', error);
     this.errorMessage = 'An error occurred while submitting the transfer request. Please try again later.';
   }
 
+  // Method to handle successful submissions
   private handleSuccess(): void {
     console.log('Transfer submitted successfully');
     // Implement any success handling logic, like navigation or showing a success message
   }
 
+  // Method to map prescription details to RxDetails
   private mapRxDetails(prescription: any): RxDetails | null {
     const seenRxNumbers = new Set<string>();
     let fromPharmacy: Pharmacy | null = null;
@@ -140,6 +156,7 @@ export class SubmitTransferComponent {
     };
   }
 
+  // Method to map patient details
   private mapPatientDetails(prescription: any): Patient {
     return {
       firstName: prescription.firstName,
@@ -155,6 +172,7 @@ export class SubmitTransferComponent {
     };
   }
 
+  // Method to map prescription lookup key
   private mapPrescriptionLookupKey(drug: any): PrescriptionLookupKey {
     return {
       id: drug.id || '', // Ensure we always return a string, even if undefined
@@ -163,6 +181,7 @@ export class SubmitTransferComponent {
     };
   }
 
+  // Method to map provider details
   private mapProviderDetails(prescriber: any): Provider {
     return {
       npi: prescriber.npi || '', // Default to an empty string if undefined
@@ -174,6 +193,7 @@ export class SubmitTransferComponent {
     };
   }
 
+  // Method to map pharmacy details
   private mapPharmacyDetails(pharmacy: any): Pharmacy {
     return {
       pharmacyName: pharmacy.pharmacyName || '', // Always return a string
@@ -182,6 +202,7 @@ export class SubmitTransferComponent {
     };
   }
 
+  // Method to map address details
   private mapAddressDetails(address: any): Address {
     return {
       line: address.line || [''], // Default to an empty array
