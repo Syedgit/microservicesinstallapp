@@ -1,331 +1,872 @@
-import { HttpClientTestingModule } from '@angular/common/http/testing';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideMockStore, MockStore } from '@ngrx/store/testing';
-import { of } from 'rxjs';
-import { SubmitTransferStore } from './submit-transfer.store';
-import { SubmitTransferComponent } from './submit-transfer.component';
-import { SubmitTransferResponse, TransferOrderRequest } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/prescriptions-list';
+prescriptionList actions.ts
 
-describe('SubmitTransferComponent', () => {
-  let component: SubmitTransferComponent;
-  let fixture: ComponentFixture<SubmitTransferComponent>;
-  let store: SubmitTransferStore;
-  let mockStore: MockStore;
-  let currentPrescriptions: any[];
+import { ReportableError } from '@digital-blocks/core/util/error-handler';
+import { createActionGroup, emptyProps, props } from '@ngrx/store';
 
-  const initialState = {
-    config: {
-      loading: false,
-      currentPrescriptions: [],
-      submitTransferResponse: null,
-    }
-  };
+import { PharmacyInfo, PrescriptionsInfo } from '../prescriptions-list.types';
+import { TransferOrderRequest } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/prescriptions-list';
 
-  beforeEach(async () => {
-    await TestBed.configureTestingModule({
-      imports: [HttpClientTestingModule],
-      providers: [
-        SubmitTransferStore,
-        provideMockStore({ initialState })
-      ]
-    }).compileComponents();
+export const PrescriptionsListActions = createActionGroup({
+  source: 'PrescriptionsList',
+  events: {
+    'Load Selected Pharmacy': emptyProps(),
+    'Submit Transfer': props<{request: TransferOrderRequest }>(),
+    'Submit Transfer Success': props<{ submitTransferResponse: any}>(),
+    'Submit Transfer Failure': props<{ error: ReportableError }>(),
+    'Load Selected Pharmacy Success': props<{ response: PharmacyInfo }>(),
+    'Load Selected Pharmacy Failure': props<{ error: ReportableError }>(),
+    'Set Selected Pharmacy': props<{ selectedPharmacy: PharmacyInfo }>(),
+    'Get PrescriptionsList': emptyProps(),
+    'Get PrescriptionsList Success': props<{ response: PrescriptionsInfo }>(),
+    'Get PrescriptionsList Failure': props<{ error: ReportableError }>(),
+    'Set Selected PrescriptionsList': props<{
+      selectedPrescriptions: PrescriptionsInfo;
+    }>(),
+    'Delete Prescriptions': props<{ deletedPrescriptions: string[] }>()
+  }
+});
 
-    fixture = TestBed.createComponent(SubmitTransferComponent);
-    component = fixture.componentInstance;
-    store = TestBed.inject(SubmitTransferStore);
-    mockStore = TestBed.inject(MockStore);
+Prescriptions-list-actions.specs.ts
 
-    currentPrescriptions = [
-      {
-        id: 7389902,
-        firstName: 'John',
-        lastName: 'Doe',
-        dateOfBirth: '01/01/1990',
-        gender: '1',
-        emailAddresses: [
-          {
-            value: 'john.doe@example.com'
-          }
-        ],
-        prescriptionforPatient: [
-          {
-            isSelected: true,
-            id: '133225401',
-            daysSupply: 90,
-            quantity: 90,
-            lastRefillDate: "08/21/2024",
-            drugInfo: {
-              drug: {
-                name: 'Drug 1'
+import { PharmacyInfo } from '../prescriptions-list.types';
+
+import { PrescriptionsListActions } from './prescriptions-list.actions';
+
+describe('PrescriptionsListActions', () => {
+  it('should create Load Selected Pharmacy action', () => {
+    const action = PrescriptionsListActions.loadSelectedPharmacy();
+
+    expect(action.type).toBe('[PrescriptionsList] Load Selected Pharmacy');
+  });
+
+  it('should create Load Selected Pharmacy Success action', () => {
+    const pharmacy: PharmacyInfo = {
+      id: 'pharmacy 1',
+      name: 'Local Pharmacy',
+      address: 'One Main Street',
+      cityState: 'New York, NY',
+      distance: '10 miles'
+    };
+    const action = PrescriptionsListActions.loadSelectedPharmacySuccess({
+      response: pharmacy
+    });
+
+    expect(action.type).toBe(
+      '[PrescriptionsList] Load Selected Pharmacy Success'
+    );
+    expect(action.response).toEqual(pharmacy);
+  });
+
+  it('should create Set Selected Pharmacy action', () => {
+    const pharmacy: PharmacyInfo = {
+      id: 'pharmacy 1',
+      name: 'Local Pharmacy',
+      address: 'One Main Street',
+      cityState: 'New York, NY',
+      distance: '10 miles'
+    };
+    const action = PrescriptionsListActions.setSelectedPharmacy({
+      selectedPharmacy: pharmacy
+    });
+
+    expect(action.type).toBe('[PrescriptionsList] Set Selected Pharmacy');
+    expect(action.selectedPharmacy).toEqual(pharmacy);
+  });
+
+  it('should create Submit Transfer action', () => {
+    const action = PrescriptionsListActions.submitTransfer();
+
+    expect(action.type).toBe('[PrescriptionsList] Submit Transfer');
+  });
+
+  it('should create Submit Transfer Success action', () => {
+    const response = {
+      "statusCode": "0000",
+      "statusDescription": "Success",
+      "data": {
+          "submitExternalTransfer": [
+              {
+                  "statusCode": "0000",
+                  "statusDescription": "Success",
+                  "confirmationNumber": "WE202409251821481QRP"
               }
-            },
-            prescriptionLookupKey: 'lookupKey1',
-            prescriber: {
-              firstName: 'Brian',
-              lastName: 'BAALI',
-              npi: '1234567890',
-              address: {
-                line: ['123 Main St'],
-                city: 'Town',
-                state: 'CA',
-                postalCode: '90210',
-                phoneNumber: '123-456-7890'
-              }
-            },
-            storeDetails: {
-              pharmacyName: 'Pharmacy 1',
-              address: {
-                line: ['456 Other St'],
-                city: 'City',
-                state: 'CA',
-                postalCode: '90210',
-                phoneNumber: '987-654-3210'
-              }
-            }
-          }
-        ]
+          ]
       }
-    ];
+  };
+    const action = PrescriptionsListActions.submitTransferSuccess({ submitTransferResponse });
 
-    fixture.detectChanges();
+    expect(action.type).toBe('[PrescriptionsList] Submit Transfer Success');
+    expect(action.submitTransferResponse).toBe(response);
   });
 
-  it('should create the component', () => {
-    expect(component).toBeTruthy();
+  it('should create Get PrescriptionsList action', () => {
+    const action = PrescriptionsListActions.getPrescriptionsList();
+
+    expect(action.type).toBe('[PrescriptionsList] Get PrescriptionsList');
   });
 
-  describe('submitTransfer', () => {
-    const mockedResponse: SubmitTransferResponse = {
-      statusCode: "0000",
-      statusDescription: "Success",
-      data: [
+  it('should create Delete Prescriptions action', () => {
+    const deletedPrescriptions: any = {};
+    const action = PrescriptionsListActions.deletePrescriptions({
+      deletedPrescriptions
+    });
+
+    expect(action.type).toBe('[PrescriptionsList] Delete Prescriptions');
+    expect(action.deletedPrescriptions).toEqual(deletedPrescriptions);
+  });
+});
+
+effects.ts
+import { inject, Injectable } from '@angular/core';
+import { errorMessage } from '@digital-blocks/core/util/error-handler';
+import { Actions, createEffect, ofType } from '@ngrx/effects';
+import { catchError, map, of, switchMap } from 'rxjs';
+
+import { PrescriptionsListService } from '../services';
+
+import { PrescriptionsListActions } from './prescriptions-list.actions';
+
+@Injectable()
+export class PrescriptionsListEffects {
+  private readonly actions$ = inject(Actions);
+
+  private readonly prescriptionService = inject(PrescriptionsListService);
+  private readonly errorTag = 'PrescriptionsListEffects';
+
+  public submitTransfer$ = createEffect(() => {
+    return this.actions$.pipe(
+      ofType(PrescriptionsListActions.submitTransfer),
+      switchMap(({request}) => {
+        //calling backend
+        return this.prescriptionService.submitTransfer(request).pipe(
+          map((submitTransferResponse) => {
+            return PrescriptionsListActions.submitTransferSuccess({ submitTransferResponse });
+          }),
+          catchError((error: unknown) => {
+            return of(
+              PrescriptionsListActions.submitTransferFailure({
+                error: errorMessage(this.errorTag, error)
+              })
+            );
+          })
+        );
+      })
+    );
+  });
+}
+
+effects.specs.ts 
+
+import { TestBed } from '@angular/core/testing';
+import { Actions } from '@ngrx/effects';
+import { provideMockActions } from '@ngrx/effects/testing';
+import { of } from 'rxjs';
+
+import { PrescriptionsListService } from '../services';
+
+import { PrescriptionsListActions } from './prescriptions-list.actions';
+import { PrescriptionsListEffects } from './prescriptions-list.effects';
+
+// Define mock data
+const mockResponse = 
+// const mockError: ReportableError = {
+//   message: 'Transfer failed',
+//   code: 500,
+//   details: { errorType: 'ServerError' }
+// };
+
+describe('PrescriptionsListEffects', () => {
+  let actions$: Actions;
+  let effects: PrescriptionsListEffects;
+  let prescriptionsListService: PrescriptionsListService;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        PrescriptionsListEffects,
+        provideMockActions(() => actions$),
         {
-          statusCode: "0000",
-          statusDescription: "Success",
-          confirmationNumber: "WE202409251821481QRP"
+          provide: PrescriptionsListService,
+          useValue: {
+            submitTransfer: jest.fn()
+          }
+        }
+      ]
+    });
+
+    effects = TestBed.inject(PrescriptionsListEffects);
+    prescriptionsListService = TestBed.inject(PrescriptionsListService);
+  });
+
+  describe('submitTransfer$', () => {
+    it('should return submitTransferSuccess action on successful transfer', () => {
+      // Arrange
+      actions$ = of(PrescriptionsListActions.submitTransfer());
+      (prescriptionsListService.submitTransfer as jest.Mock).mockReturnValue(
+        of(mockResponse)
+      );
+
+      // Act
+      effects.submitTransfer$.subscribe((action) => {
+        // Assert
+        expect(action).toEqual(
+          PrescriptionsListActions.submitTransferSuccess({
+            response: mockResponse
+          })
+        );
+      });
+    });
+
+    // it('should return submitTransferFailure action on failed transfer', () => {
+    //   // Arrange
+    //   actions$ = of(PrescriptionsListActions.submitTransfer());
+    //   (prescriptionsListService.submitTransfer as jest.Mock).mockReturnValue(throwError(() => mockError));
+
+    //   // Act
+    //   effects.submitTransfer$.subscribe(action => {
+    //     // Assert
+    //     expect(action).toEqual(PrescriptionsListActions.submitTransferFailure({
+    //       error: expect.objectContaining({
+    //         message: 'Transfer failed',
+    //         code: 500
+    //       })
+    //     }));
+    //   });
+    // });
+  });
+});
+
+facade.ts 
+
+import { Injectable, inject } from '@angular/core';
+import { Store } from '@ngrx/store';
+import { Observable } from 'rxjs';
+
+import { PharmacyInfo, PrescriptionsInfo } from '../prescriptions-list.types';
+
+import { PrescriptionsListActions } from './prescriptions-list.actions';
+import {
+  PrescriptionsListFeature,
+  PrescriptionsListState
+} from './prescriptions-list.reducer';
+import { TransferOrderRequest } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/prescriptions-list';
+
+@Injectable({ providedIn: 'root' })
+export class PrescriptionsListFacade {
+  protected readonly store = inject(Store<PrescriptionsListState>);
+
+  public readonly selectedPrescriptionsList$: Observable<PrescriptionsInfo | null> =
+    this.store.select(PrescriptionsListFeature.selectSelectedPrescriptions);
+
+  public readonly selectedPharmacy$: Observable<PharmacyInfo | null> =
+    this.store.select(PrescriptionsListFeature.selectSelectedPharmacy);
+
+  public readonly loading$ = this.store.select(
+    PrescriptionsListFeature.selectLoading
+  );
+
+  public readonly submitTransferResponse$ = this.store.select(
+    PrescriptionsListFeature.selectSubmitTransferResponse
+  );
+
+  public readonly error$ = this.store.select(
+    PrescriptionsListFeature.selectError
+  );
+
+  //prescriptions-list
+  public initializeSelectedPrescriptions(): void {
+    const selectedPrescriptions: PrescriptionsInfo = {
+      id: 'subscriber1',
+      patientName: 'John',
+      medication: [
+        {
+          med: 'Atorvastatin 10mg'
+        },
+        {
+          med: 'Buproprion 75mg'
+        },
+        {
+          med: 'Isinopril 10mg'
         }
       ]
     };
 
-    it('should call submitTransfer on valid form submission', () => {
-      // Mock currentPrescriptions$ observable to return the mock prescription data
-      mockStore.overrideSelector('currentPrescriptions$', of(currentPrescriptions));
+    this.store.dispatch(
+      PrescriptionsListActions.setSelectedPrescriptionsList({
+        selectedPrescriptions
+      })
+    );
+  }
 
-      // Spy on submitTransfer in the store
-      const spySubmitTransfer = jest.spyOn(store, 'submitTransfer').mockImplementation(() => {});
+  // selected-pharmacy
+  public initializeSelectedPharmacy(): void {
+    const selectedPharmacy: PharmacyInfo = {
+      id: 'pharmacy1',
+      name: 'CVS Pharmacy',
+      address: '12315 Venice Boulevard',
+      cityState: 'Mar Vista, CA 90066',
+      distance: '25 miles'
+    };
 
-      // Call the component's submitTransfer method
-      component.submitTransfer();
+    this.store.dispatch(
+      PrescriptionsListActions.setSelectedPharmacy({ selectedPharmacy })
+    );
+  }
 
-      // Check if submitTransfer was called
-      expect(spySubmitTransfer).toHaveBeenCalled();
-    });
 
-    it('should build the correct transfer order request', () => {
-      // Call the buildTransferOrderRequest method directly
-      const actualRequest = component.buildTransferOrderRequest(currentPrescriptions);
+  public submitTransfer(request : TransferOrderRequest): void {
+    this.store.dispatch(PrescriptionsListActions.submitTransfer({request}));
+  }
 
-      const expectedRequest: TransferOrderRequest = {
-        data: {
-          externalTransfer: [
-            {
-              carrierId: '',
-              clinicalRuleDate: '09/16/2024',
-              patient: {
-                firstName: 'John',
-                lastName: 'Doe',
-                dateOfBirth: '01/01/1990',
-                memberId: '7389902',
-                patientId: '7389902',
-                patientIdType: 'PBM_QL_PARTICIPANT_ID_TYPE',
-                profileId: null,
-                email: 'john.doe@example.com',
-                address: {
-                  line: [''],
-                  city: '',
-                  state: '',
-                  postalCode: '',
-                  phoneNumber: ''
-                }
-              },
-              requestedChannel: '',
-              rxDetails: [
-                {
-                  drugDetails: [
-                    {
-                      drugName: 'Drug 1',
-                      encPrescriptionLookupKey: 'lookupKey1',
-                      prescriptionLookupKey: {
-                        id: '133225401',
-                        idType: 'PBM_QL_PARTICIPANT_ID_TYPE',
-                        rxNumber: 'lookupKey1'
-                      },
-                      provider: {
-                        firstName: 'Brian',
-                        lastName: 'BAALI',
-                        npi: '1234567890',
-                        phoneNumber: '',
-                        faxNumber: '',
-                        address: {
-                          line: ['123 Main St'],
-                          city: 'Town',
-                          state: 'CA',
-                          postalCode: '90210',
-                          phoneNumber: '123-456-7890'
-                        }
-                      },
-                      recentFillDate: '08/21/2024',
-                      quantity: 90,
-                      daySupply: 90
-                    }
-                  ],
-                  fromPharmacy: {
-                    pharmacyName: 'Pharmacy 1',
-                    address: {
-                      line: ['456 Other St'],
-                      city: 'City',
-                      state: 'CA',
-                      postalCode: '90210',
-                      phoneNumber: '987-654-3210'
-                    },
-                    storeId: '99999'
+  //delete selected prescriptions
+  public deleteSelectedPrescriptions(deletedPrescriptions: string[]): void {
+    this.store.dispatch(
+      PrescriptionsListActions.deletePrescriptions({ deletedPrescriptions })
+    );
+  }
+}
+
+
+facade.specs.ts 
+
+import { TestBed } from '@angular/core/testing';
+import { Store, StoreModule } from '@ngrx/store';
+
+import { PharmacyInfo, PrescriptionsInfo } from '../prescriptions-list.types';
+
+import { PrescriptionsListActions } from './prescriptions-list.actions';
+import { PrescriptionsListFacade } from './prescriptions-list.facade';
+import { PrescriptionsListState } from './prescriptions-list.reducer';
+
+// Define mock data
+const mockPharmacy: PharmacyInfo = {
+  id: 'pharmacy1',
+  name: 'CVS Pharmacy',
+  address: '12315 Venice Boulevard',
+  cityState: 'Mar Vista, CA 90066',
+  distance: '25 miles'
+};
+
+const mockPrescriptionsInfo: PrescriptionsInfo = {
+  id: 'subscriber1',
+  patientName: 'John',
+  medication: [
+    { med: 'Atorvastatin 10mg' },
+    { med: 'Buproprion 75mg' },
+    { med: 'Isinopril 10mg' }
+  ]
+};
+
+const request = {
+  "data": {
+      "externalTransfer": [
+          {
+              "carrierId": "",
+              "clinicalRuleDate": "09/16/2024",
+              "patient": {
+                  "address": {
+                      "city": "LOS ANGELES",
+                      "line": [
+                          "10800 ROSE AVENUE"
+                      ],
+                      "phoneNumber": "7322083469",
+                      "postalCode": "90034",
+                      "state": "CA"
                   },
-                  toPharmacy: {
-                    pharmacyName: 'ALLIANCERX WALGREENS PRIME 16280',
-                    address: {
-                      line: ['GREY 1 CVS DRIVE'],
-                      city: 'WOONSOCKET',
-                      state: 'RI',
-                      postalCode: '02895',
-                      phoneNumber: '8005414959'
-                    },
-                    storeId: '99999'
+                  "dateOfBirth": "",
+                  "email": "",
+                  "firstName": "John",
+                  "gender": "M",
+                  "lastName": "Miller",
+                  "memberId": "",
+                  "patientId": "737961639",
+                  "patientIdType": "PBM_QL_PARTICIPANT_ID_TYPE",
+                  "profileId": null
+              },
+              "requestedChannel": "",
+              "rxDetails": [
+                  {
+                      "drugDetails": [
+                          {
+                              "daySupply": 30,
+                              "drugName": "LYRICA 100MG CAP",
+                              "encPrescriptionLookupKey": "U2FsdGVkX",
+                              "prescriptionLookupKey": {
+                                  "id": 73796,
+                                  "idType": "PBM_QL_PARTICIPANT_ID_TYPE",
+                                  "rxNumber": "129740006"
+                              },
+                              "provider": {
+                                  "address": {
+                                      "city": "HILLIARD",
+                                      "line": [
+                                          "5 LOVERS LANE"
+                                      ],
+                                      "postalCode": "43026",
+                                      "state": "OH"
+                                  },
+                                  "faxNumber": "4920136825",
+                                  "firstName": "CPMSEBQ",
+                                  "lastName": "BRADENIII",
+                                  "npi": "",
+                                  "phoneNumber": "4920130462"
+                              },
+                              "quantity": 30,
+                              "recentFillDate": "08/21/2024"
+                          }
+                      ],
+                      "fromPharmacy": {
+                          "address": {
+                              "city": "ASHWAUBENON",
+                              "line": [
+                                  "2395 S ONEIDA ST STE 100"
+                              ],
+                              "phoneNumber": "9203057011",
+                              "postalCode": "54304",
+                              "state": "WI"
+                          },
+                          "pharmacyName": "HYVEE PHARMACY 1025"
+                      },
+                      "toPharmacy": {
+                          "address": {
+                              "city": "WOONSOCKET",
+                              "line": [
+                                  "GREY 1 CVS DRIVE"
+                              ],
+                              "phoneNumber": "8005414959",
+                              "postalCode": "02895",
+                              "state": "RI"
+                          },
+                          "pharmacyName": "ALLIANCERX WALGREENS PRIME 16280",
+                          "storeId": "99999"
+                      }
                   }
-                }
               ]
-            }
-          ],
-          idType: 'PBM_QL_PARTICIPANT_ID_TYPE',
-          profile: null
+          }
+      ],
+      "idType": "PBM_QL_PARTICIPANT_ID_TYPE",
+      "profile": null
+  }
+}
+
+describe('PrescriptionsListFacade', () => {
+  let facade: PrescriptionsListFacade;
+  let store: Store<PrescriptionsListState>;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      imports: [
+        StoreModule.forRoot({}, { metaReducers: [] }) // Dummy root store
+      ],
+      providers: [
+        PrescriptionsListFacade,
+        {
+          provide: Store,
+          useValue: {
+            dispatch: jest.fn(),
+            select: jest.fn()
+          }
         }
-      };
-
-      // Check if the actual request matches the expected request
-      expect(actualRequest).toEqual(expectedRequest);
+      ]
     });
 
-    it('should handle successful transfer submission', () => {
-      // Mock the successful response
-      mockStore.overrideSelector('submitTransferResponse', of(mockedResponse));
+    store = TestBed.inject(Store);
+    facade = TestBed.inject(PrescriptionsListFacade);
+  });
 
-      // Call the component's submitTransfer method
-      component.submitTransfer();
+  it('should dispatch setSelectedPrescriptionsList action on initializeSelectedPrescriptions', () => {
+    const storeDispatchSpy = jest.spyOn(store, 'dispatch');
 
-      // Check if errorMessage is null on success
-      expect(component.errorMessage).toBeNull();
+    facade.initializeSelectedPrescriptions();
+
+    expect(storeDispatchSpy).toHaveBeenCalledWith(
+      PrescriptionsListActions.setSelectedPrescriptionsList({
+        selectedPrescriptions: mockPrescriptionsInfo
+      })
+    );
+  });
+
+  it('should dispatch setSelectedPharmacy action on initializeSelectedPharmacy', () => {
+    const storeDispatchSpy = jest.spyOn(store, 'dispatch');
+
+    facade.initializeSelectedPharmacy();
+
+    expect(storeDispatchSpy).toHaveBeenCalledWith(
+      PrescriptionsListActions.setSelectedPharmacy({
+        selectedPharmacy: mockPharmacy
+      })
+    );
+  });
+
+  it('should dispatch submitTransfer action on submitTransfer', () => {
+    const storeDispatchSpy = jest.spyOn(store, 'dispatch');
+
+    facade.submitTransfer(request);
+
+    expect(storeDispatchSpy).toHaveBeenCalledWith(
+      PrescriptionsListActions.submitTransfer(request)
+    );
+  });
+
+  it('should dispatch deletePrescriptions action on deleteSelectedPrescriptions', () => {
+    const deletedPrescriptions = ['Atorvastatin 10mg'];
+    const storeDispatchSpy = jest.spyOn(store, 'dispatch');
+
+    facade.deleteSelectedPrescriptions(deletedPrescriptions);
+
+    expect(storeDispatchSpy).toHaveBeenCalledWith(
+      PrescriptionsListActions.deletePrescriptions({ deletedPrescriptions })
+    );
+  });
+});
+
+
+reducer.ts
+
+import { ReportableError } from '@digital-blocks/core/util/error-handler';
+import { ActionReducer, createFeature, createReducer, on } from '@ngrx/store';
+
+import { PharmacyInfo, PrescriptionsInfo } from '../prescriptions-list.types';
+
+import { PrescriptionsListActions } from './prescriptions-list.actions';
+import { SubmitTransferResponse } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/prescriptions-list';;
+
+export const PRESCRIPTIONS_LIST_FEATURE_KEY = 'prescriptions-list';
+
+export interface PrescriptionsListState {
+  selectedPrescriptions: PrescriptionsInfo | null;
+  loading: boolean;
+  error: ReportableError | undefined;
+  selectedPharmacy: PharmacyInfo | null;
+  submitTransferResponse: SubmitTransferResponse | null;
+}
+
+export const initialPrescriptionsListState: PrescriptionsListState = {
+  selectedPrescriptions: null,
+  loading: false,
+  error: undefined,
+  selectedPharmacy: null,
+  submitTransferResponse: null
+};
+
+const reducer: ActionReducer<PrescriptionsListState> = createReducer(
+  initialPrescriptionsListState,
+  on(
+    PrescriptionsListActions.loadSelectedPharmacySuccess,
+    (state, { response }) => ({
+      ...state,
+      selectedPharmacy: response,
+      loading: false
+    })
+  ),
+  on(PrescriptionsListActions.submitTransfer, (state) => ({
+    ...state,
+    loading: true
+  })),
+  on(
+    PrescriptionsListActions.submitTransferSuccess,
+    (state, { submitTransferResponse }) => ({
+      ...state,
+      submitTransferResponse,
+      loading: false
+    })
+  ),
+  on(
+    PrescriptionsListActions.submitTransferFailure,
+    (state, { error }) => ({
+      ...state,
+      loading: false,
+      error
+    })
+  ),
+  on(
+    PrescriptionsListActions.loadSelectedPharmacyFailure,
+    (state, { error }) => ({
+      ...state,
+      loading: false,
+      error
+    })
+  ),
+  on(
+    PrescriptionsListActions.setSelectedPharmacy,
+    (state, { selectedPharmacy }) => ({
+      ...state,
+      selectedPharmacy
+    })
+  ),
+
+  on(
+    PrescriptionsListActions.getPrescriptionsListSuccess,
+    (state, { response }) => ({
+      ...state,
+      selectedPrescriptions: response,
+      loading: false
+    })
+  ),
+  on(
+    PrescriptionsListActions.getPrescriptionsListFailure,
+    (state, { error }) => ({
+      ...state,
+      loading: false,
+      error
+    })
+  ),
+  on(
+    PrescriptionsListActions.setSelectedPrescriptionsList,
+    (state, { selectedPrescriptions }) => ({
+      ...state,
+      selectedPrescriptions
+    })
+  ),
+  on(
+    PrescriptionsListActions.deletePrescriptions,
+    (state, { deletedPrescriptions }) => ({
+      ...state,
+      selectedPrescriptions: {
+        ...state.selectedPrescriptions,
+        medication: state.selectedPrescriptions?.medication.filter(
+          (med) => !deletedPrescriptions.includes(med.med)
+        )
+      } as PrescriptionsInfo | null
+    })
+  )
+);
+
+export const PrescriptionsListFeature = createFeature({
+  name: PRESCRIPTIONS_LIST_FEATURE_KEY,
+  reducer
+});
+
+//Define selectors - these may not be needed
+// export const selectPrescriptionsListState = (state: PrescriptionsListState) =>
+//   state;
+// export const selectLoading = (state: PrescriptionsListState) => state.loading;
+// export const selectError = (state: PrescriptionsListState) => state.error;
+
+
+reducer.specs.ts 
+
+import { ReportableError } from '@digital-blocks/core/util/error-handler';
+
+import { PharmacyInfo, PrescriptionsInfo } from '../prescriptions-list.types';
+
+import { PrescriptionsListActions } from './prescriptions-list.actions';
+import {
+  PrescriptionsListState,
+  initialPrescriptionsListState,
+  PrescriptionsListFeature
+} from './prescriptions-list.reducer';
+
+const atorvastatin = 'Atorvastatin 10mg';
+const buproprion = 'Buproprion 75mg';
+const isinopril = 'Isinopril 10mg';
+
+describe('PrescriptionsListReducer', () => {
+  let state: PrescriptionsListState;
+
+  beforeEach(() => {
+    state = { ...initialPrescriptionsListState };
+  });
+
+  it('should return the initial state', () => {
+    const { reducer } = PrescriptionsListFeature;
+    const result = reducer(state, { type: '@@INIT' });
+
+    expect(result).toEqual(initialPrescriptionsListState);
+  });
+
+  it('should handle loadSelectedPharmacySuccess action', () => {
+    // const pharmacy: Pharmacy = {
+    //   id: 'pharmacy 1',
+    //   name: 'Local Pharmacy',
+    //   address: 'One Main Street',
+    //   cityState: 'New York, NY',
+    //   distance: '10 miles'
+    // };
+    const mockPharmacy: Pharmacy = {
+      id: 'pharmacy1',
+      name: 'CVS Pharmacy',
+      address: '12315 Venice Boulevard',
+      cityState: 'Mar Vista, CA 90066',
+      distance: '25 miles'
+    };
+
+    const action = PrescriptionsListActions.loadSelectedPharmacySuccess({
+      response: mockPharmacy
     });
+    const result = PrescriptionsListFeature.reducer(state, action);
 
-    it('should handle a failed transfer submission', () => {
-      const errorResponse = {
-        statusCode: "5000",
-        statusDescription: "Error occurred",
-        data: []
-      };
-
-      // Mock the error response
-      mockStore.overrideSelector('submitTransferResponse', of(errorResponse));
-
-      // Call the component's submitTransfer method
-      component.submitTransfer();
-
-      // Ensure the error message is set on failure
-      expect(component.errorMessage).toBe('An error occurred while submitting the transfer.');
-    });
-
-    it('should warn if no prescriptions are selected', () => {
-      // Update prescriptions to have none selected
-      currentPrescriptions[0].prescriptionforPatient[0].isSelected = false;
-
-      component.currentPrescriptions = currentPrescriptions;
-      component.submitTransfer();
-
-      // Check that the appropriate warning is shown
-      expect(component.errorMessage).toBe('No prescriptions selected for transfer.');
+    expect(result).toEqual({
+      ...initialPrescriptionsListState,
+      selectedPharmacy: mockPharmacy,
+      loading: false
     });
   });
 
-  describe('buildTransferOrderRequest', () => {
-    it('should build the transfer order request correctly', () => {
-      component.currentPrescriptions = currentPrescriptions;
-      const fromPharmacy = {
-        pharmacyName: 'ALLIANCERX WALGREENS PRIME 16280',
-        storeId: '99999',
-        address: {
-          line: ['GREY 1 CVS DRIVE'],
-          city: 'WOONSOCKET',
-          state: 'RI',
-          postalCode: '02895',
-          phoneNumber: '8005414959'
-        }
-      };
-      const request = component.buildTransferOrderRequest(currentPrescriptions);
+  it('should handle loadSelectedPharmacyFailure action', () => {
+    const mockError: ReportableError = {
+      message: 'Not Found',
+      tag: 'PrescriptionsListEffects'
+    };
 
-      expect(request.data.externalTransfer.length).toBe(1);
-      expect(request.data.externalTransfer[0].patient.firstName).toBe('John');
-      expect(request.data.externalTransfer[0].rxDetails[0].fromPharmacy.pharmacyName).toBe(fromPharmacy.pharmacyName);
+    const action = PrescriptionsListActions.loadSelectedPharmacyFailure({
+      error: mockError
     });
+    const result = PrescriptionsListFeature.reducer(state, action);
 
-    it('should return empty externalTransfer array if no prescriptions are selected', () => {
-      currentPrescriptions[0].prescriptionforPatient[0].isSelected = false;
-      component.currentPrescriptions = currentPrescriptions;
-      const request = component.buildTransferOrderRequest(currentPrescriptions);
-      expect(request.data.externalTransfer.length).toBe(0);
+    expect(result).toEqual({
+      ...initialPrescriptionsListState,
+      loading: false,
+      error: mockError
     });
   });
 
-  describe('mapRxDetails', () => {
-    it('should map the prescription details correctly', () => {
-      const prescription = currentPrescriptions[0];
-      const result = component.mapRxDetails(prescription);
-      const fromPharmacy = {
-        pharmacyName: 'ALLIANCERX WALGREENS PRIME 16280',
-        storeId: '99999',
-        address: {
-          line: ['GREY 1 CVS DRIVE'],
-          city: 'WOONSOCKET',
-          state: 'RI',
-          postalCode: '02895',
-          phoneNumber: '8005414959'
-        }
-      };
-      expect(result?.drugDetails.length).toBe(1);
-      expect(result?.fromPharmacy.pharmacyName).toBe(fromPharmacy.pharmacyName);
+  it('should handle setSelectedPharmacy action', () => {
+    const mockPharmacy: PharmacyInfo = {
+      id: 'pharmacy1',
+      name: 'CVS Pharmacy',
+      address: '12315 Venice Boulevard',
+      cityState: 'Mar Vista, CA 90066',
+      distance: '25 miles'
+    };
+
+    const action = PrescriptionsListActions.setSelectedPharmacy({
+      selectedPharmacy: mockPharmacy
     });
+    const result = PrescriptionsListFeature.reducer(state, action);
 
-    it('should return null if no selected prescriptions', () => {
-      currentPrescriptions[0].prescriptionforPatient[0].isSelected = false;
-      const prescription = currentPrescriptions[0];
-      const result = component.mapRxDetails(prescription);
-
-      expect(result).toBeNull();
+    expect(result).toEqual({
+      ...initialPrescriptionsListState,
+      selectedPharmacy: mockPharmacy
     });
   });
 
-  describe('mapPatientDetails', () => {
-    it('should map the patient details correctly', () => {
-      const prescription = currentPrescriptions[0];
-      const result = component.mapPatientDetails(prescription);
+  it('should handle getPrescriptionsListSuccess action', () => {
+    const mockPrescriptionsInfo: PrescriptionsInfo = {
+      id: 'subscriber1',
+      patientName: 'John',
+      medication: [
+        {
+          med: atorvastatin
+        },
+        {
+          med: buproprion
+        },
+        {
+          med: isinopril
+        }
+      ]
+    };
 
-      expect(result.firstName).toBe('John');
-      expect(result.email).toBe('john.doe@example.com');
+    const action = PrescriptionsListActions.getPrescriptionsListSuccess({
+      response: mockPrescriptionsInfo
     });
+    const result = PrescriptionsListFeature.reducer(state, action);
 
-    it('should handle missing email addresses', () => {
-      currentPrescriptions[0].emailAddresses = [];
-      const prescription = currentPrescriptions[0];
-      const result = component.mapPatientDetails(prescription);
+    expect(result).toEqual({
+      ...initialPrescriptionsListState,
+      selectedPrescriptions: mockPrescriptionsInfo,
+      loading: false
+    });
+  });
 
-      expect(result.email).toBe('');
+  it('should handle getPrescriptionsListFailure action', () => {
+    const mockError: ReportableError = {
+      message: 'Not Found',
+      tag: 'PrescriptionsListEffects'
+    };
+
+    const action = PrescriptionsListActions.getPrescriptionsListFailure({
+      error: mockError
+    });
+    const result = PrescriptionsListFeature.reducer(state, action);
+
+    expect(result).toEqual({
+      ...initialPrescriptionsListState,
+      loading: false,
+      error: mockError
+    });
+  });
+
+  it('should handle setSelectedPrescriptionsList action', () => {
+    const mockPrescriptionsInfo: PrescriptionsInfo = {
+      id: 'subscriber1',
+      patientName: 'John',
+      medication: [
+        {
+          med: atorvastatin
+        },
+        {
+          med: buproprion
+        },
+        {
+          med: isinopril
+        }
+      ]
+    };
+
+    const action = PrescriptionsListActions.setSelectedPrescriptionsList({
+      selectedPrescriptions: mockPrescriptionsInfo
+    });
+    const result = PrescriptionsListFeature.reducer(state, action);
+
+    expect(result).toEqual({
+      ...initialPrescriptionsListState,
+      selectedPrescriptions: mockPrescriptionsInfo
     });
   });
 });
+
+describe('PrescriptionsListFacade', () => {
+  let initialState: PrescriptionsListState;
+
+  beforeEach(() => {
+    initialState = {
+      selectedPrescriptions: {
+        id: 'subscriber1',
+        patientName: 'John',
+        medication: [
+          { med: atorvastatin },
+          { med: buproprion },
+          { med: isinopril }
+        ]
+      },
+      loading: false,
+      error: undefined,
+      selectedPharmacy: null,
+      submitTransferResponse: null
+    };
+  });
+
+  it('should handle deletePrescriptions action when selectedPrescriptions is not null', () => {
+    const deletedPrescriptions = [buproprion];
+    const action = PrescriptionsListActions.deletePrescriptions({
+      deletedPrescriptions
+    });
+
+    const newState = PrescriptionsListFeature.reducer(initialState, action);
+
+    expect(newState.selectedPrescriptions).toEqual({
+      id: 'subscriber1',
+      patientName: 'John',
+      medication: [{ med: atorvastatin }, { med: isinopril }]
+    });
+  });
+
+  it('should handle deletePrescriptions action when selectedPrescriptions is null', () => {
+    initialState.selectedPrescriptions = null;
+    const deletedPrescriptions = [buproprion];
+    const action = PrescriptionsListActions.deletePrescriptions({
+      deletedPrescriptions
+    });
+
+    const newState = PrescriptionsListFeature.reducer(initialState, action);
+
+    //expect(newState.selectedPrescriptions).toBeNull();
+  });
+});
+
+
+
+
+
