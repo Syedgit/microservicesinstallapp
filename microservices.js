@@ -1,97 +1,168 @@
 import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { ExperienceService } from '@digital-blocks/angular/core/util/services';
-import { errorMessage } from '@digital-blocks/core/util/error-handler';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { provideMockStore } from '@ngrx/store/testing';
-import { Observable, firstValueFrom, of, throwError } from 'rxjs';
+import { ExperienceService } from '@digital-blocks/angular/core/util/services';
+import { errorMessage } from '@digital-blocks/core/util/error-handler';
+import { Observable, of, throwError, firstValueFrom } from 'rxjs';
 
-import { CurrentPrescriptionsService } from '../services/current-prescriptions.service';
+import { PrescriptionsListService } from '../services/prescriptions-list.service';
+import { PrescriptionsListEffects } from './prescriptions-list.effects';
+import { PrescriptionsListActions } from './prescriptions-list.actions';
+import { SubmitTransferResponse } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/prescriptions-list';
 
-import { CurrentPrescriptionsActions } from './current-prescriptions.actions';
-import { CurrentPrescriptionsEffects } from './current-prescriptions.effects';
-import { getPrescriptionsForTransferResponse } from './mock-data/get-prescriptions-for-transfer-response.mock';
-
-describe('CurrentPrescriptionsEffects', () => {
+describe('PrescriptionsListEffects', () => {
   let actions$: Observable<any>;
-  let effects: CurrentPrescriptionsEffects;
-  let service: CurrentPrescriptionsService;
+  let effects: PrescriptionsListEffects;
+  let service: PrescriptionsListService;
   const mockExperienceService = { post: jest.fn() };
-  const errorText = 'No prescription available';
+  const errorText = 'Transfer failed';
+  
+  const mockResponse: SubmitTransferResponse = {
+    statusCode: "0000",
+    statusDescription: "Success",
+    data: [
+      {
+        statusCode: "0000",
+        statusDescription: "Success",
+        confirmationNumber: "WE202409251821481QRP"
+      }
+    ]
+  };
+
+  const mockRequest = {
+    data: {
+      externalTransfer: [
+        {
+          carrierId: "",
+          clinicalRuleDate: "09/16/2024",
+          patient: {
+            address: {
+              city: "LOS ANGELES",
+              line: ["10800 ROSE AVENUE"],
+              phoneNumber: "7322083469",
+              postalCode: "90034",
+              state: "CA"
+            },
+            dateOfBirth: "",
+            email: "",
+            firstName: "John",
+            gender: "M",
+            lastName: "Miller",
+            memberId: "",
+            patientId: "737961639",
+            patientIdType: "PBM_QL_PARTICIPANT_ID_TYPE",
+            profileId: null
+          },
+          requestedChannel: "",
+          rxDetails: [
+            {
+              drugDetails: [
+                {
+                  daySupply: 30,
+                  drugName: "LYRICA 100MG CAP",
+                  encPrescriptionLookupKey: "U2FsdGVkX",
+                  prescriptionLookupKey: {
+                    id: 73796,
+                    idType: "PBM_QL_PARTICIPANT_ID_TYPE",
+                    rxNumber: "129740006"
+                  },
+                  provider: {
+                    address: {
+                      city: "HILLIARD",
+                      line: ["5 LOVERS LANE"],
+                      postalCode: "43026",
+                      state: "OH"
+                    },
+                    faxNumber: "4920136825",
+                    firstName: "CPMSEBQ",
+                    lastName: "BRADENIII",
+                    npi: "",
+                    phoneNumber: "4920130462"
+                  },
+                  quantity: 30,
+                  recentFillDate: "08/21/2024"
+                }
+              ],
+              fromPharmacy: {
+                address: {
+                  city: "ASHWAUBENON",
+                  line: ["2395 S ONEIDA ST STE 100"],
+                  phoneNumber: "9203057011",
+                  postalCode: "54304",
+                  state: "WI"
+                },
+                pharmacyName: "HYVEE PHARMACY 1025"
+              },
+              toPharmacy: {
+                address: {
+                  city: "WOONSOCKET",
+                  line: ["GREY 1 CVS DRIVE"],
+                  phoneNumber: "8005414959",
+                  postalCode: "02895",
+                  state: "RI"
+                },
+                pharmacyName: "ALLIANCERX WALGREENS PRIME 16280",
+                storeId: "99999"
+              }
+            }
+          ]
+        }
+      ],
+      idType: "PBM_QL_PARTICIPANT_ID_TYPE",
+      profile: null
+    }
+  };
 
   beforeEach(() => {
     TestBed.configureTestingModule({
       imports: [HttpClientTestingModule],
       providers: [
-        CurrentPrescriptionsEffects,
+        PrescriptionsListEffects,
         provideMockStore(),
         provideMockActions(() => actions$),
-        CurrentPrescriptionsService,
+        PrescriptionsListService,
         { provide: ExperienceService, useValue: mockExperienceService }
       ]
     });
-    effects = TestBed.inject(CurrentPrescriptionsEffects);
-    service = TestBed.inject(CurrentPrescriptionsService);
+
+    effects = TestBed.inject(PrescriptionsListEffects);
+    service = TestBed.inject(PrescriptionsListService);
   });
 
-  describe('getCurrentPrescriptions$', () => {
-    it('should return the getCurrentPrescriptionsSuccess action when ngrxOnInitEffects loads prescription data successfully', async () => {
-      const mockApiResponse =
-        service.constructMemberDetailsFromGetPrescriptionResponse(
-          getPrescriptionsForTransferResponse.data.getLinkedMemberPatients
-        );
-      const expectedAction =
-        CurrentPrescriptionsActions.getCurrentPrescriptionsSuccess({
-          currentPrescriptions: mockApiResponse
-        });
-
-      actions$ = of(CurrentPrescriptionsActions.getCurrentPrescriptions());
+  describe('submitTransfer$', () => {
+    it('should return submitTransferSuccess action on successful transfer', async () => {
+      actions$ = of(PrescriptionsListActions.submitTransfer({ request: mockRequest }));
 
       jest
-        .spyOn(service, 'getPrescriptionsForTransferExperienceApi')
-        .mockReturnValue(of(mockApiResponse));
+        .spyOn(service, 'submitTransfer')
+        .mockReturnValue(of(mockResponse));
 
-      expect(await firstValueFrom(effects.getCurrentPrescriptions$)).toEqual(
-        expectedAction
+      const result = await firstValueFrom(effects.submitTransfer$);
+
+      expect(result).toEqual(
+        PrescriptionsListActions.submitTransferSuccess({
+          submitTransferResponse: mockResponse
+        })
       );
     });
 
-    it('should return the getCurrentPrescriptionsFailure action when ngrxOnInitEffects loads prescription data with empty member', async () => {
-      actions$ = of(CurrentPrescriptionsActions.getCurrentPrescriptions());
+    it('should return submitTransferFailure action on failed transfer', async () => {
+      actions$ = of(PrescriptionsListActions.submitTransfer({ request: mockRequest }));
 
       jest
-        .spyOn(service, 'getPrescriptionsForTransferExperienceApi')
-        .mockReturnValue(of([]));
-
-      expect(
-        await firstValueFrom(effects.getCurrentPrescriptions$)
-      ).toMatchObject({
-        error: {
-          tag: '[CurrentPrescriptionsEffects]',
-          message: errorText
-        }
-      });
-    });
-
-    it('should return the getCurrentPrescriptionsFailure action when ngrxOnInitEffects loads get prescription fails', async () => {
-      actions$ = of(CurrentPrescriptionsActions.getCurrentPrescriptions());
-
-      jest
-        .spyOn(service, 'getPrescriptionsForTransferExperienceApi')
+        .spyOn(service, 'submitTransfer')
         .mockReturnValue(
-          throwError(() => {
-            return errorMessage(effects.constructor.name, errorText);
-          })
+          throwError(() => errorMessage(effects.constructor.name, errorText))
         );
 
-      expect(
-        await firstValueFrom(effects.getCurrentPrescriptions$)
-      ).toMatchObject({
-        error: {
-          tag: '[CurrentPrescriptionsEffects]',
-          message: errorText
-        }
-      });
+      const result = await firstValueFrom(effects.submitTransfer$);
+
+      expect(result).toEqual(
+        PrescriptionsListActions.submitTransferFailure({
+          error: errorMessage(effects.constructor.name, errorText)
+        })
+      );
     });
   });
 });
