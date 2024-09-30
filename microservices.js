@@ -1,24 +1,72 @@
-tions-list.effects.spec.ts (11.852 s)
-  ● PrescriptionsListEffects › submitTransfer$ › should return submitTransferFailure action on failed transfer
+import { TestBed } from '@angular/core/testing';
+import { Actions } from '@ngrx/effects';
+import { provideMockActions } from '@ngrx/effects/testing';
+import { of, throwError } from 'rxjs';
 
-    expect(received).toEqual(expected) // deep equality
+import { PrescriptionsListService } from '../services';
 
-    - Expected  - 2
-    + Received  + 2
+import { PrescriptionsListActions } from './prescriptions-list.actions';
+import { PrescriptionsListEffects } from './prescriptions-list.effects';
+import { ReportableError } from '@digital-blocks/core/util/error-handler';
 
-      Object {
-    -   "error": Object {
-    +   "submitTransferResponse": Object {
-          "message": "Transfer failed",
-          "tag": "PrescriptionsList",
-        },
-    -   "type": "[PrescriptionsList] Submit Transfer Failure",
-    +   "type": "[PrescriptionsList] Submit Transfer Success",
-      }
+describe('PrescriptionsListEffects', () => {
+  let actions$: Actions;
+  let effects: PrescriptionsListEffects;
+  let prescriptionsListService: PrescriptionsListService;
 
-      71 |
-      72 |       effects.submitTransfer$.subscribe((action) => {
-    > 73 |         expect(action).toEqual(PrescriptionsListActions.submitTransferFailure({ error: mockError }));
-         |                        ^
-      74 |         done();
-      75 |       })
+  const mockError: ReportableError = {
+    message: 'Transfer failed',
+    tag: 'PrescriptionsList',
+  };
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        PrescriptionsListEffects,
+        provideMockActions(() => actions$),
+        {
+          provide: PrescriptionsListService,
+          useValue: {
+            submitTransfer: jest.fn()
+          }
+        }
+      ]
+    });
+
+    effects = TestBed.inject(PrescriptionsListEffects);
+    prescriptionsListService = TestBed.inject(PrescriptionsListService);
+  });
+
+  describe('submitTransfer$', () => {
+    it('should return submitTransferSuccess action on successful transfer', () => {
+      const mockResponse = {
+        statusCode: '0000',
+        statusDescription: 'Success',
+        data: [],
+      };
+
+      actions$ = of(PrescriptionsListActions.submitTransfer({ request: {} }));
+      (prescriptionsListService.submitTransfer as jest.Mock).mockReturnValue(of(mockResponse));
+
+      effects.submitTransfer$.subscribe((action) => {
+        expect(action).toEqual(
+          PrescriptionsListActions.submitTransferSuccess({
+            submitTransferResponse: mockResponse
+          })
+        );
+      });
+    });
+
+    it('should return submitTransferFailure action on failed transfer', (done) => {
+      actions$ = of(PrescriptionsListActions.submitTransfer({ request: {} }));
+      (prescriptionsListService.submitTransfer as jest.Mock).mockReturnValue(throwError(() => mockError));
+
+      effects.submitTransfer$.subscribe((action) => {
+        expect(action).toEqual(
+          PrescriptionsListActions.submitTransferFailure({ error: mockError })
+        );
+        done();
+      });
+    });
+  });
+});
