@@ -1,247 +1,158 @@
 import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { ExperienceService } from '@digital-blocks/angular/core/util/services';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
+import { Config } from './prescriptions-list.service.config';
+import { SubmitTransferResponse, TransferOrderRequest } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/prescriptions-list';
+import { PrescriptionsListService } from './prescriptions-list.service';
 
-import { getPrescriptionsForTransferResponse } from '../+state/mock-data/get-prescriptions-for-transfer-response.mock';
+describe('PrescriptionsListService', () => {
+  let service: PrescriptionsListService;
+  let experienceService: ExperienceService;
 
-import { CurrentPrescriptionsService } from './current-prescriptions.service';
+  const mockResponse: SubmitTransferResponse = {
+    statusCode: '0000',
+    statusDescription: 'Success',
+    data: [
+      {
+        statusCode: '0000',
+        statusDescription: 'Success',
+        confirmationNumber: 'CONFIRM123'
+      }
+    ]
+  };
 
-describe(CurrentPrescriptionsService.name, () => {
-  let service: CurrentPrescriptionsService;
-  const mockExperienceService = { post: jest.fn() };
+  const mockRequest: TransferOrderRequest = {
+    data: {
+      externalTransfer: [
+        {
+          carrierId: '',
+          clinicalRuleDate: '09/16/2024',
+          patient: {
+            address: {
+              city: 'Los Angeles',
+              line: ['123 Main St'],
+              phoneNumber: '1234567890',
+              postalCode: '90001',
+              state: 'CA'
+            },
+            dateOfBirth: '01/01/1990',
+            email: 'john.doe@example.com',
+            firstName: 'John',
+            gender: 'M',
+            lastName: 'Doe',
+            memberId: '7389902',
+            patientId: '7389902',
+            patientIdType: 'PBM_QL_PARTICIPANT_ID_TYPE',
+            profileId: null
+          },
+          requestedChannel: '',
+          rxDetails: [
+            {
+              drugDetails: [
+                {
+                  daySupply: 30,
+                  drugName: 'Test Drug',
+                  encPrescriptionLookupKey: 'ENC_KEY',
+                  prescriptionLookupKey: {
+                    id: 123,
+                    idType: 'PBM_QL_PARTICIPANT_ID_TYPE',
+                    rxNumber: 'RX123'
+                  },
+                  provider: {
+                    address: {
+                      city: 'LA',
+                      line: ['456 Pharmacy St'],
+                      phoneNumber: '9876543210',
+                      postalCode: '90002',
+                      state: 'CA'
+                    },
+                    faxNumber: '',
+                    firstName: 'Dr.',
+                    lastName: 'Smith',
+                    npi: 'NPI123',
+                    phoneNumber: '9876543210'
+                  },
+                  quantity: 30,
+                  recentFillDate: '2024-09-01'
+                }
+              ],
+              fromPharmacy: {
+                address: {
+                  city: 'LA',
+                  line: ['456 Pharmacy St'],
+                  phoneNumber: '9876543210',
+                  postalCode: '90002',
+                  state: 'CA'
+                },
+                pharmacyName: 'Local Pharmacy'
+              },
+              toPharmacy: {
+                address: {
+                  city: 'LA',
+                  line: ['789 Destination St'],
+                  phoneNumber: '1234567890',
+                  postalCode: '90003',
+                  state: 'CA'
+                },
+                pharmacyName: 'Destination Pharmacy',
+                storeId: '1001'
+              }
+            }
+          ]
+        }
+      ],
+      idType: 'PBM_QL_PARTICIPANT_ID_TYPE',
+      profile: null
+    }
+  };
 
   beforeEach(() => {
     TestBed.configureTestingModule({
       imports: [HttpClientTestingModule],
       providers: [
-        CurrentPrescriptionsService,
-        { provide: ExperienceService, useValue: mockExperienceService }
+        PrescriptionsListService,
+        { provide: ExperienceService, useValue: { post: jest.fn() } }
       ]
-    });
-    service = TestBed.inject(CurrentPrescriptionsService);
-  });
-
-  it('should be created', () => {
-    expect(service).toBeTruthy();
-  });
-
-  it('should execute the getPrescriptionsForTransferExperienceApi method', () => {
-    mockExperienceService.post.mockReturnValue(
-      of(getPrescriptionsForTransferResponse)
-    );
-
-    service.getPrescriptionsForTransferExperienceApi().subscribe((response) => {
-      const updatedPrescriptionData =
-        service.constructMemberDetailsFromGetPrescriptionResponse(
-          getPrescriptionsForTransferResponse?.data?.getLinkedMemberPatients
-        );
-
-      expect(response).toEqual(updatedPrescriptionData);
-    });
-  });
-
-  it('should execute the getPrescriptionsForTransferExperienceApi method and response has no member info', () => {
-    const prescriptionResponseWithoutMemberDetails: any = {
-      ...getPrescriptionsForTransferResponse,
-      data: {
-        ...getPrescriptionsForTransferResponse.data,
-        getLinkedMemberPatients: null
-      }
-    };
-
-    mockExperienceService.post.mockReturnValue(
-      of(prescriptionResponseWithoutMemberDetails)
-    );
-
-    service.getPrescriptionsForTransferExperienceApi().subscribe((response) => {
-      expect(response).toEqual([]);
-    });
-  });
-
-  it('should add custom parameter with prescription data', () => {
-    const memberPrescriptions = service.addCustomPrameterToPrescriptionObject(
-      getPrescriptionsForTransferResponse.data.getLinkedMemberPatients[0]
-        .patient.prescriptionforPatient
-    );
-
-    expect(memberPrescriptions[0]).toHaveProperty('isSelected', false);
-  });
-
-  it('should return with empty array for no memberDetails', () => {
-    const memberDetails =
-      service.constructMemberDetailsFromGetPrescriptionResponse([]);
-
-    expect(memberDetails).toEqual([]);
-  });
-
-  it('should return with no memberDetails', () => {
-    const memberDetails =
-      service.constructMemberDetailsFromGetPrescriptionResponse(null);
-
-    expect(memberDetails).toEqual([]);
-  });
-
-  it('should return with transformed member detail array when passed memberDetails', () => {
-    const memberDetails =
-      service.constructMemberDetailsFromGetPrescriptionResponse(
-        getPrescriptionsForTransferResponse.data.getLinkedMemberPatients
-      );
-
-    for (const memberData of memberDetails) {
-      expect(memberData).toHaveProperty('id');
-      expect(memberData).toHaveProperty('firstName');
-      expect(memberData).toHaveProperty('lastName');
-      expect(memberData).toHaveProperty('personCode');
-      expect(memberData).toHaveProperty('prescriptionforPatient');
-    }
-  });
-  it('should return with transformed member detail array when passed memberDetails - with no id', () => {
-    const prescriptionResponseWithoutMemberDetails: any = {
-      ...getPrescriptionsForTransferResponse,
-      data: {
-        ...getPrescriptionsForTransferResponse.data,
-        getLinkedMemberPatients:
-          getPrescriptionsForTransferResponse.data.getLinkedMemberPatients.map(
-            () => ({})
-          )
-      }
-    };
-    const memberDetails =
-      service.constructMemberDetailsFromGetPrescriptionResponse(
-        prescriptionResponseWithoutMemberDetails.data.getLinkedMemberPatients
-      );
-
-    for (const memberData of memberDetails) {
-      expect(memberData).toHaveProperty('id', undefined);
-      expect(memberData).toHaveProperty('firstName', undefined);
-      expect(memberData).toHaveProperty('lastName', undefined);
-      expect(memberData).toHaveProperty('personCode', undefined);
-      expect(memberData).toHaveProperty('prescriptionforPatient', undefined);
-    }
-  });
-  it('should return with transformed member detail array when passed memberDetails - with null', () => {
-    const prescriptionResponseWithoutMemberDetails: any = {
-      ...getPrescriptionsForTransferResponse,
-      data: {
-        ...getPrescriptionsForTransferResponse.data,
-        getLinkedMemberPatients:
-          getPrescriptionsForTransferResponse.data.getLinkedMemberPatients.map(
-            () => null
-          )
-      }
-    };
-    const memberDetails =
-      service.constructMemberDetailsFromGetPrescriptionResponse(
-        prescriptionResponseWithoutMemberDetails.data.getLinkedMemberPatients
-      );
-
-    for (const memberData of memberDetails) {
-      expect(memberData).toHaveProperty('id', undefined);
-      expect(memberData).toHaveProperty('firstName', undefined);
-      expect(memberData).toHaveProperty('lastName', undefined);
-      expect(memberData).toHaveProperty('personCode', undefined);
-      expect(memberData).toHaveProperty('prescriptionforPatient', undefined);
-    }
-  });
-});
-
-
-
-prescription service
-
-import { inject, Injectable } from '@angular/core';
-import {
-  ExperienceService,
-  mapResponseBody
-} from '@digital-blocks/angular/core/util/services';
-
-import { Config } from './prescriptions-list.service.config';
-import { SubmitTransferResponse, TransferOrderRequest } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/prescriptions-list';
-import { map, Observable } from 'rxjs';
-
-@Injectable({
-  providedIn: 'root'
-})
-export class PrescriptionsListService {
-  private readonly experienceService = inject(ExperienceService);
-  submitTransfer(request: TransferOrderRequest): Observable<SubmitTransferResponse>  {
-    return this.experienceService
-      .post<SubmitTransferResponse>(
-        Config.clientId,
-        Config.experiences,
-        Config.mock,
-        {
-          data: request.data
-        },
-        {
-          maxRequestTime: 10_000
-        }
-      ).pipe(
-        mapResponseBody(),
-        map((response: any) => {
-          return response;
-        })
-      );
-  }
-}
-
-
-precription service specs 
-
-import { HttpClientTestingModule } from '@angular/common/http/testing';
-import { TestBed } from '@angular/core/testing';
-import { ExperienceService } from '@digital-blocks/angular/core/util/services';
-import { StoreModule } from '@ngrx/store';
-
-import { PrescriptionsListService } from './prescriptions-list.service';
-
-// const mockExperienceService = {
-//     post: jest.fn()
-// };
-
-describe('PrescriptionsListService', () => {
-  let service: PrescriptionsListService;
-
-  beforeEach(() => {
-    TestBed.configureTestingModule({
-      imports: [HttpClientTestingModule, StoreModule.forRoot({})],
-      providers: [ExperienceService, PrescriptionsListService]
-      //   PrescriptionsListService,
-      //   { provide: ExperienceService, useValue: mockExperienceService }
-      // ]
     });
 
     service = TestBed.inject(PrescriptionsListService);
+    experienceService = TestBed.inject(ExperienceService);
   });
 
   it('should be created', () => {
     expect(service).toBeTruthy();
   });
 
-  it('should submit transfer and return a response', () => {
-    // service.submitTransfer().subscribe(response => {
-    //   expect(response).toBeDefined();
-    //   done();
-    // })
+  it('should submit transfer and return a successful response', (done) => {
+    jest.spyOn(experienceService, 'post').mockReturnValue(of(mockResponse));
+
+    service.submitTransfer(mockRequest).subscribe((response) => {
+      expect(response).toEqual(mockResponse);
+      done();
+    });
+
+    expect(experienceService.post).toHaveBeenCalledWith(
+      Config.clientId,
+      Config.experiences,
+      Config.mock,
+      { data: mockRequest.data },
+      { maxRequestTime: 10_000 }
+    );
   });
 
-  //   it('should call post method of ExperienceService and process response', (done) => {
-  //     const mockResponse = { data: 'mockData' };
-  //     mockExperienceService.post.mockReturnValue(of(mockResponse));
+  it('should return an error when the transfer fails', (done) => {
+    const mockError = { message: 'Transfer failed' };
+    jest.spyOn(experienceService, 'post').mockReturnValue(throwError(() => mockError));
 
-  //     jest.spyOn(global, 'mapResponseBody').mockImplementation(() => of(mockResponse));
-
-  //     service.submitTransfer().subscribe(response => {
-  //       expect(response).toEqual(mockResponse);
-  //       expect(mockExperienceService.post).toHaveBeenCalledWith(
-  //         Config.clientId,
-  //         Config.experiences,
-  //         Config.MOCK,
-  //         {},
-  //         { maxRequestTime: 10_000 }
-  //       )
-  //       done();
-  //     });
-  //   });
+    service.submitTransfer(mockRequest).subscribe({
+      next: () => {
+        fail('Expected an error, but got success response');
+      },
+      error: (error) => {
+        expect(error).toEqual(mockError);
+        done();
+      }
+    });
+  });
 });
