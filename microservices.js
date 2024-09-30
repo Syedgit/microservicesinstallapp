@@ -1,174 +1,198 @@
-import { HttpClientTestingModule } from '@angular/common/http/testing';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideMockStore, MockStore } from '@ngrx/store/testing';
-import { of, throwError } from 'rxjs';
-import { SubmitTransferComponent } from './submit-transfer.component';
+import { Component, CUSTOM_ELEMENTS_SCHEMA, inject, Input } from '@angular/core';
+import { TransferPrescriptionsSubHeaderComponent } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/components';
 import { SubmitTransferStore } from './submit-transfer.store';
-import { TransferOrderRequest } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/submit-transfer';
+import {
+  TransferOrderRequest,
+  ExternalTransfer,
+  Patient,
+  RxDetails,
+  Pharmacy,
+  Address,
+  DrugDetails,
+  PrescriptionLookupKey,
+  Provider
+} from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/submit-transfer';
+import { IPrescriptionDetails } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/current-prescriptions';
 
-describe('SubmitTransferComponent', () => {
-  let component: SubmitTransferComponent;
-  let fixture: ComponentFixture<SubmitTransferComponent>;
-  let store: SubmitTransferStore;
-  let mockStore: MockStore;
-  let currentPrescriptions: any[];
-
-  const initialState = {
-    config: {
-      loading: false,
-      currentPrescriptions: []
-    }
+@Component({
+  selector: 'lib-submit-transfer',
+  standalone: true,
+  imports: [TransferPrescriptionsSubHeaderComponent],
+  templateUrl: 'submit-transfer.component.html',
+  styleUrls: ['submit-transfer.component.scss'],
+  schemas: [CUSTOM_ELEMENTS_SCHEMA],
+  providers: [SubmitTransferStore],
+  host: { ngSkipHydration: 'true' }
+})
+export class SubmitTransferComponent {
+  @Input() public staticContent = {
+    continueBtnText: 'Continue'
   };
 
-  beforeEach(async () => {
-    await TestBed.configureTestingModule({
-      imports: [HttpClientTestingModule],
-      providers: [
-        SubmitTransferStore,
-        provideMockStore({ initialState })
-      ],
-      declarations: [SubmitTransferComponent]
-    }).compileComponents();
+  protected readonly store = inject(SubmitTransferStore);
+  currentPrescriptions: IPrescriptionDetails[] | undefined;
+  private selectedPharmacy: any;
+  public errorMessage: string | null = null;
 
-    fixture = TestBed.createComponent(SubmitTransferComponent);
-    component = fixture.componentInstance;
-    store = TestBed.inject(SubmitTransferStore);
-    mockStore = TestBed.inject(MockStore);
+  public submitTransfer(): void {
+    this.store.currentPrescriptions$.subscribe(
+      (data) => {
+        this.currentPrescriptions = data;
+        const transferOrderRequest = this.buildTransferOrderRequest();
 
-    currentPrescriptions = [
-      {
-        id: 7389902,
-        prescriptionforPatient: [
-          {
-            isselected: true,
-            id: '133225401',
-            drugInfo: {
-              drug: {
-                name: 'Drug 1'
-              }
-            },
-            prescriptionLookupKey: 'lookupKey1',
-            prescriber: {
-              firstName: 'John',
-              lastName: 'Doe',
-              address: {
-                line: ['123 Main St'],
-                city: 'Town',
-                state: 'CA',
-                postalCode: '90210',
-                phoneNumber: '123-456-7890'
-              }
-            },
-            storeDetails: {
-              pharmacyName: 'Pharmacy 1',
-              address: {
-                line: ['456 Other St'],
-                city: 'City',
-                state: 'CA',
-                postalCode: '90210',
-                phoneNumber: '987-654-3210'
-              }
-            }
+        if (transferOrderRequest.data.externalTransfer.length > 0) {
+          try {
+            this.store.submitTransfer(transferOrderRequest);
+            this.handleSuccess(); // Handle success logic
+          } catch (error) {
+            this.handleError(error); // Handle error logic
           }
-        ]
+        } else {
+          console.warn('No prescriptions selected for transfer.');
+          this.errorMessage = 'No prescriptions selected for transfer.';
+        }
+      },
+      (error) => {
+        this.handleError(error);
       }
-    ];
+    );
+  }
 
-    fixture.detectChanges();
-  });
+  private buildTransferOrderRequest(): TransferOrderRequest {
+    const externalTransfer: ExternalTransfer[] = this.currentPrescriptions?.length
+      ? this.currentPrescriptions
+          .map(prescription => {
+            const rxDetails: RxDetails | null = this.mapRxDetails(prescription);
+            if (rxDetails && rxDetails.drugDetails.length > 0) {
+              const patient: Patient = this.mapPatientDetails(prescription);
+              return {
+                requestedChannel: '',
+                carrierId: '',
+                clinicalRuleDate: '09/16/2024',
+                patient,
+                rxDetails: [rxDetails]
+              };
+            }
+            return null; // Return null if no selected prescriptions
+          })
+          .filter((transfer): transfer is ExternalTransfer => transfer !== null) // Filter out null entries
+      : [];
 
-  it('should create the component', () => {
-    expect(component).toBeTruthy();
-  });
+    return {
+      data: {
+        id: '737961639', // Assuming this is the patient ID
+        idType: 'PBM_QL_PARTICIPANT_ID_TYPE',
+        profile: null,
+        externalTransfer
+      }
+    };
+  }
 
-  describe('submitTransfer', () => {
-    it('should handle a successful transfer submission', () => {
-      const spySubmitTransfer = jest
-        .spyOn(store, 'submitTransfer')
-        .mockReturnValue(of({}));
+  private handleError(error: any): void {
+    console.error('An error occurred:', error);
+    this.errorMessage = 'An error occurred while submitting the transfer request. Please try again later.';
+  }
 
-      component.currentPrescriptions = currentPrescriptions;
-      component.submitTransfer();
-      expect(spySubmitTransfer).toHaveBeenCalled();
-      expect(component.errorMessage).toBeNull();
-    });
+  private handleSuccess(): void {
+    console.log('Transfer submitted successfully');
+    // Implement any success handling logic, like navigation or showing a success message
+  }
 
-    it('should handle a failed transfer submission', () => {
-      const spySubmitTransfer = jest
-        .spyOn(store, 'submitTransfer')
-        .mockReturnValue(throwError('Error occurred'));
+  private mapRxDetails(prescription: any): RxDetails | null {
+    const uniqueDrugDetails: DrugDetails[] = [];
+    const seenRxNumbers = new Set<string>();
+    let fromPharmacy: Pharmacy | null = null;
 
-      component.currentPrescriptions = currentPrescriptions;
-      component.submitTransfer();
-      expect(spySubmitTransfer).toHaveBeenCalled();
-      expect(component.errorMessage).toBe(
-        'An error occurred while submitting the transfer request. Please try again later.'
-      );
-    });
+    prescription.prescriptionforPatient
+      .filter((drug: any) => drug.isselected) // Only include selected prescriptions
+      .forEach((drug: any) => {
+        if (!seenRxNumbers.has(drug.id)) {
+          seenRxNumbers.add(drug.id);
 
-    it('should warn if no prescriptions are selected', () => {
-      currentPrescriptions[0].prescriptionforPatient[0].isselected = false;
+          uniqueDrugDetails.push({
+            drugName: drug.drugInfo.drug.name,
+            encPrescriptionLookupKey: drug.prescriptionLookupKey,
+            prescriptionLookupKey: this.mapPrescriptionLookupKey(drug),
+            provider: this.mapProviderDetails(drug.prescriber),
+            recentFillDate: drug.lastRefillDate,
+            quantity: drug.quantity,
+            daySupply: drug.daysSupply
+          });
 
-      component.currentPrescriptions = currentPrescriptions;
-      component.submitTransfer();
-      expect(component.errorMessage).toBe(
-        'No prescriptions selected for transfer.'
-      );
-    });
-  });
+          if (drug.storeDetails && !fromPharmacy) {
+            fromPharmacy = this.mapPharmacyDetails(drug.storeDetails);
+          }
+        }
+      });
 
-  describe('buildTransferOrderRequest', () => {
-    it('should build the transfer order request correctly', () => {
-      component.currentPrescriptions = currentPrescriptions;
+    if (uniqueDrugDetails.length === 0 || !fromPharmacy) {
+      return null; // Return null if no selected drug details or no fromPharmacy
+    }
 
-      const request = component.buildTransferOrderRequest();
-      expect(request.data.externalTransfer.length).toBe(1);
-      expect(request.data.externalTransfer[0].patient.firstName).toBe('John');
-      expect(request.data.externalTransfer[0].rxDetails[0].fromPharmacy.pharmacyName).toBe('Pharmacy 1');
-    });
+    const toPharmacy: Pharmacy = this.mapPharmacyDetails(this.selectedPharmacy);
 
-    it('should return empty externalTransfer array if no prescriptions are selected', () => {
-      currentPrescriptions[0].prescriptionforPatient[0].isselected = false;
+    return {
+      drugDetails: uniqueDrugDetails,
+      fromPharmacy,
+      toPharmacy
+    };
+  }
 
-      component.currentPrescriptions = currentPrescriptions;
-      const request = component.buildTransferOrderRequest();
-      expect(request.data.externalTransfer.length).toBe(0);
-    });
-  });
+  private mapPatientDetails(prescription: any): Patient {
+    return {
+      firstName: prescription.firstName,
+      lastName: prescription.lastName,
+      gender: prescription.gender,
+      dateOfBirth: prescription.dateOfBirth,
+      memberId: prescription.id.toString(),
+      patientId: prescription.id.toString(),
+      patientIdType: 'PBM_QL_PARTICIPANT_ID_TYPE',
+      profileId: null,
+      email: prescription.emailAddresses?.[0]?.value || '',
+      address: {
+        line: [''],
+        city: '',
+        state: '',
+        postalCode: '',
+        phoneNumber: ''
+      } // Assuming no detailed address info available in currentPrescriptions
+    };
+  }
 
-  describe('mapRxDetails', () => {
-    it('should map the prescription details correctly', () => {
-      const prescription = currentPrescriptions[0];
+  private mapPrescriptionLookupKey(drug: any): PrescriptionLookupKey {
+    return {
+      id: drug.id,
+      idType: 'PBM_QL_PARTICIPANT_ID_TYPE',
+      rxNumber: drug.prescriptionLookupKey
+    };
+  }
 
-      const result = component.mapRxDetails(prescription);
-      expect(result?.drugDetails.length).toBe(1);
-      expect(result?.fromPharmacy.pharmacyName).toBe('Pharmacy 1');
-    });
+  private mapProviderDetails(prescriber: any): Provider {
+    return {
+      npi: prescriber.npi || '',
+      firstName: prescriber.firstName,
+      lastName: prescriber.lastName,
+      phoneNumber: prescriber.phone,
+      faxNumber: prescriber.fax,
+      address: this.mapAddressDetails(prescriber.address)
+    };
+  }
 
-    it('should return null if no selected prescriptions', () => {
-      currentPrescriptions[0].prescriptionforPatient[0].isselected = false;
+  private mapPharmacyDetails(pharmacy: any): Pharmacy {
+    return {
+      pharmacyName: pharmacy.pharmacyName,
+      address: this.mapAddressDetails(pharmacy.address),
+      storeId: pharmacy.storeId || ''
+    };
+  }
 
-      const prescription = currentPrescriptions[0];
-      const result = component.mapRxDetails(prescription);
-      expect(result).toBeNull();
-    });
-  });
-
-  describe('mapPatientDetails', () => {
-    it('should map the patient details correctly', () => {
-      const prescription = currentPrescriptions[0];
-
-      const result = component.mapPatientDetails(prescription);
-      expect(result.firstName).toBe('John');
-      expect(result.email).toBe('john.doe@example.com');
-    });
-
-    it('should handle missing email addresses', () => {
-      currentPrescriptions[0].emailAddresses = [];
-
-      const prescription = currentPrescriptions[0];
-      const result = component.mapPatientDetails(prescription);
-      expect(result.email).toBe('');
-    });
-  });
-});
+  private mapAddressDetails(address: any): Address {
+    return {
+      line: address.line,
+      city: address.city,
+      state: address.state,
+      postalCode: address.postalCode,
+      phoneNumber: address.phoneNumber
+    };
+  }
+}
