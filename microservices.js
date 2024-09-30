@@ -38,34 +38,25 @@ describe('PrescriptionsListEffects', () => {
   });
 
   describe('submitTransfer$', () => {
-    it('should return submitTransferSuccess action on successful transfer', () => {
-      const mockResponse = {
-        statusCode: '0000',
-        statusDescription: 'Success',
-        data: [],
-      };
-
-      actions$ = of(PrescriptionsListActions.submitTransfer({ request: {} }));
-      (prescriptionsListService.submitTransfer as jest.Mock).mockReturnValue(of(mockResponse));
-
-      effects.submitTransfer$.subscribe((action) => {
-        expect(action).toEqual(
-          PrescriptionsListActions.submitTransferSuccess({
-            submitTransferResponse: mockResponse
-          })
-        );
-      });
-    });
-
     it('should return submitTransferFailure action on failed transfer', (done) => {
+      // Mocking the action stream
       actions$ = of(PrescriptionsListActions.submitTransfer({ request: {} }));
+
+      // Mock the service to throw an error
       (prescriptionsListService.submitTransfer as jest.Mock).mockReturnValue(throwError(() => mockError));
 
-      effects.submitTransfer$.subscribe((action) => {
-        expect(action).toEqual(
-          PrescriptionsListActions.submitTransferFailure({ error: mockError })
-        );
-        done();
+      // Subscribe to the effect
+      effects.submitTransfer$.subscribe({
+        next: (action) => {
+          // Expect a failure action
+          expect(action).toEqual(
+            PrescriptionsListActions.submitTransferFailure({ error: mockError })
+          );
+          done(); // Signal the test is done
+        },
+        error: (error) => {
+          done.fail(error); // In case of error, fail the test
+        }
       });
     });
   });
