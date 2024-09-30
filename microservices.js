@@ -1,5 +1,6 @@
 import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { HttpResponse } from '@angular/common/http';
 import { ExperienceService } from '@digital-blocks/angular/core/util/services';
 import { of, throwError } from 'rxjs';
 import { Config } from './prescriptions-list.service.config';
@@ -125,7 +126,12 @@ describe('PrescriptionsListService', () => {
   });
 
   it('should submit transfer and return a successful response', (done) => {
-    jest.spyOn(experienceService, 'post').mockReturnValue(of(mockResponse));
+    const mockHttpResponse = new HttpResponse<SubmitTransferResponse>({
+      body: mockResponse,
+      status: 200
+    });
+
+    jest.spyOn(experienceService, 'post').mockReturnValue(of(mockHttpResponse));
 
     service.submitTransfer(mockRequest).subscribe((response) => {
       expect(response).toEqual(mockResponse);
