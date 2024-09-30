@@ -1,168 +1,247 @@
 import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { provideMockActions } from '@ngrx/effects/testing';
-import { provideMockStore } from '@ngrx/store/testing';
 import { ExperienceService } from '@digital-blocks/angular/core/util/services';
-import { errorMessage } from '@digital-blocks/core/util/error-handler';
-import { Observable, of, throwError, firstValueFrom } from 'rxjs';
+import { of } from 'rxjs';
 
-import { PrescriptionsListService } from '../services/prescriptions-list.service';
-import { PrescriptionsListEffects } from './prescriptions-list.effects';
-import { PrescriptionsListActions } from './prescriptions-list.actions';
-import { SubmitTransferResponse } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/prescriptions-list';
+import { getPrescriptionsForTransferResponse } from '../+state/mock-data/get-prescriptions-for-transfer-response.mock';
 
-describe('PrescriptionsListEffects', () => {
-  let actions$: Observable<any>;
-  let effects: PrescriptionsListEffects;
-  let service: PrescriptionsListService;
+import { CurrentPrescriptionsService } from './current-prescriptions.service';
+
+describe(CurrentPrescriptionsService.name, () => {
+  let service: CurrentPrescriptionsService;
   const mockExperienceService = { post: jest.fn() };
-  const errorText = 'Transfer failed';
-  
-  const mockResponse: SubmitTransferResponse = {
-    statusCode: "0000",
-    statusDescription: "Success",
-    data: [
-      {
-        statusCode: "0000",
-        statusDescription: "Success",
-        confirmationNumber: "WE202409251821481QRP"
-      }
-    ]
-  };
-
-  const mockRequest = {
-    data: {
-      externalTransfer: [
-        {
-          carrierId: "",
-          clinicalRuleDate: "09/16/2024",
-          patient: {
-            address: {
-              city: "LOS ANGELES",
-              line: ["10800 ROSE AVENUE"],
-              phoneNumber: "7322083469",
-              postalCode: "90034",
-              state: "CA"
-            },
-            dateOfBirth: "",
-            email: "",
-            firstName: "John",
-            gender: "M",
-            lastName: "Miller",
-            memberId: "",
-            patientId: "737961639",
-            patientIdType: "PBM_QL_PARTICIPANT_ID_TYPE",
-            profileId: null
-          },
-          requestedChannel: "",
-          rxDetails: [
-            {
-              drugDetails: [
-                {
-                  daySupply: 30,
-                  drugName: "LYRICA 100MG CAP",
-                  encPrescriptionLookupKey: "U2FsdGVkX",
-                  prescriptionLookupKey: {
-                    id: 73796,
-                    idType: "PBM_QL_PARTICIPANT_ID_TYPE",
-                    rxNumber: "129740006"
-                  },
-                  provider: {
-                    address: {
-                      city: "HILLIARD",
-                      line: ["5 LOVERS LANE"],
-                      postalCode: "43026",
-                      state: "OH"
-                    },
-                    faxNumber: "4920136825",
-                    firstName: "CPMSEBQ",
-                    lastName: "BRADENIII",
-                    npi: "",
-                    phoneNumber: "4920130462"
-                  },
-                  quantity: 30,
-                  recentFillDate: "08/21/2024"
-                }
-              ],
-              fromPharmacy: {
-                address: {
-                  city: "ASHWAUBENON",
-                  line: ["2395 S ONEIDA ST STE 100"],
-                  phoneNumber: "9203057011",
-                  postalCode: "54304",
-                  state: "WI"
-                },
-                pharmacyName: "HYVEE PHARMACY 1025"
-              },
-              toPharmacy: {
-                address: {
-                  city: "WOONSOCKET",
-                  line: ["GREY 1 CVS DRIVE"],
-                  phoneNumber: "8005414959",
-                  postalCode: "02895",
-                  state: "RI"
-                },
-                pharmacyName: "ALLIANCERX WALGREENS PRIME 16280",
-                storeId: "99999"
-              }
-            }
-          ]
-        }
-      ],
-      idType: "PBM_QL_PARTICIPANT_ID_TYPE",
-      profile: null
-    }
-  };
 
   beforeEach(() => {
     TestBed.configureTestingModule({
       imports: [HttpClientTestingModule],
       providers: [
-        PrescriptionsListEffects,
-        provideMockStore(),
-        provideMockActions(() => actions$),
-        PrescriptionsListService,
+        CurrentPrescriptionsService,
         { provide: ExperienceService, useValue: mockExperienceService }
       ]
     });
+    service = TestBed.inject(CurrentPrescriptionsService);
+  });
 
-    effects = TestBed.inject(PrescriptionsListEffects);
+  it('should be created', () => {
+    expect(service).toBeTruthy();
+  });
+
+  it('should execute the getPrescriptionsForTransferExperienceApi method', () => {
+    mockExperienceService.post.mockReturnValue(
+      of(getPrescriptionsForTransferResponse)
+    );
+
+    service.getPrescriptionsForTransferExperienceApi().subscribe((response) => {
+      const updatedPrescriptionData =
+        service.constructMemberDetailsFromGetPrescriptionResponse(
+          getPrescriptionsForTransferResponse?.data?.getLinkedMemberPatients
+        );
+
+      expect(response).toEqual(updatedPrescriptionData);
+    });
+  });
+
+  it('should execute the getPrescriptionsForTransferExperienceApi method and response has no member info', () => {
+    const prescriptionResponseWithoutMemberDetails: any = {
+      ...getPrescriptionsForTransferResponse,
+      data: {
+        ...getPrescriptionsForTransferResponse.data,
+        getLinkedMemberPatients: null
+      }
+    };
+
+    mockExperienceService.post.mockReturnValue(
+      of(prescriptionResponseWithoutMemberDetails)
+    );
+
+    service.getPrescriptionsForTransferExperienceApi().subscribe((response) => {
+      expect(response).toEqual([]);
+    });
+  });
+
+  it('should add custom parameter with prescription data', () => {
+    const memberPrescriptions = service.addCustomPrameterToPrescriptionObject(
+      getPrescriptionsForTransferResponse.data.getLinkedMemberPatients[0]
+        .patient.prescriptionforPatient
+    );
+
+    expect(memberPrescriptions[0]).toHaveProperty('isSelected', false);
+  });
+
+  it('should return with empty array for no memberDetails', () => {
+    const memberDetails =
+      service.constructMemberDetailsFromGetPrescriptionResponse([]);
+
+    expect(memberDetails).toEqual([]);
+  });
+
+  it('should return with no memberDetails', () => {
+    const memberDetails =
+      service.constructMemberDetailsFromGetPrescriptionResponse(null);
+
+    expect(memberDetails).toEqual([]);
+  });
+
+  it('should return with transformed member detail array when passed memberDetails', () => {
+    const memberDetails =
+      service.constructMemberDetailsFromGetPrescriptionResponse(
+        getPrescriptionsForTransferResponse.data.getLinkedMemberPatients
+      );
+
+    for (const memberData of memberDetails) {
+      expect(memberData).toHaveProperty('id');
+      expect(memberData).toHaveProperty('firstName');
+      expect(memberData).toHaveProperty('lastName');
+      expect(memberData).toHaveProperty('personCode');
+      expect(memberData).toHaveProperty('prescriptionforPatient');
+    }
+  });
+  it('should return with transformed member detail array when passed memberDetails - with no id', () => {
+    const prescriptionResponseWithoutMemberDetails: any = {
+      ...getPrescriptionsForTransferResponse,
+      data: {
+        ...getPrescriptionsForTransferResponse.data,
+        getLinkedMemberPatients:
+          getPrescriptionsForTransferResponse.data.getLinkedMemberPatients.map(
+            () => ({})
+          )
+      }
+    };
+    const memberDetails =
+      service.constructMemberDetailsFromGetPrescriptionResponse(
+        prescriptionResponseWithoutMemberDetails.data.getLinkedMemberPatients
+      );
+
+    for (const memberData of memberDetails) {
+      expect(memberData).toHaveProperty('id', undefined);
+      expect(memberData).toHaveProperty('firstName', undefined);
+      expect(memberData).toHaveProperty('lastName', undefined);
+      expect(memberData).toHaveProperty('personCode', undefined);
+      expect(memberData).toHaveProperty('prescriptionforPatient', undefined);
+    }
+  });
+  it('should return with transformed member detail array when passed memberDetails - with null', () => {
+    const prescriptionResponseWithoutMemberDetails: any = {
+      ...getPrescriptionsForTransferResponse,
+      data: {
+        ...getPrescriptionsForTransferResponse.data,
+        getLinkedMemberPatients:
+          getPrescriptionsForTransferResponse.data.getLinkedMemberPatients.map(
+            () => null
+          )
+      }
+    };
+    const memberDetails =
+      service.constructMemberDetailsFromGetPrescriptionResponse(
+        prescriptionResponseWithoutMemberDetails.data.getLinkedMemberPatients
+      );
+
+    for (const memberData of memberDetails) {
+      expect(memberData).toHaveProperty('id', undefined);
+      expect(memberData).toHaveProperty('firstName', undefined);
+      expect(memberData).toHaveProperty('lastName', undefined);
+      expect(memberData).toHaveProperty('personCode', undefined);
+      expect(memberData).toHaveProperty('prescriptionforPatient', undefined);
+    }
+  });
+});
+
+
+
+prescription service
+
+import { inject, Injectable } from '@angular/core';
+import {
+  ExperienceService,
+  mapResponseBody
+} from '@digital-blocks/angular/core/util/services';
+
+import { Config } from './prescriptions-list.service.config';
+import { SubmitTransferResponse, TransferOrderRequest } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/prescriptions-list';
+import { map, Observable } from 'rxjs';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class PrescriptionsListService {
+  private readonly experienceService = inject(ExperienceService);
+  submitTransfer(request: TransferOrderRequest): Observable<SubmitTransferResponse>  {
+    return this.experienceService
+      .post<SubmitTransferResponse>(
+        Config.clientId,
+        Config.experiences,
+        Config.mock,
+        {
+          data: request.data
+        },
+        {
+          maxRequestTime: 10_000
+        }
+      ).pipe(
+        mapResponseBody(),
+        map((response: any) => {
+          return response;
+        })
+      );
+  }
+}
+
+
+precription service specs 
+
+import { HttpClientTestingModule } from '@angular/common/http/testing';
+import { TestBed } from '@angular/core/testing';
+import { ExperienceService } from '@digital-blocks/angular/core/util/services';
+import { StoreModule } from '@ngrx/store';
+
+import { PrescriptionsListService } from './prescriptions-list.service';
+
+// const mockExperienceService = {
+//     post: jest.fn()
+// };
+
+describe('PrescriptionsListService', () => {
+  let service: PrescriptionsListService;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      imports: [HttpClientTestingModule, StoreModule.forRoot({})],
+      providers: [ExperienceService, PrescriptionsListService]
+      //   PrescriptionsListService,
+      //   { provide: ExperienceService, useValue: mockExperienceService }
+      // ]
+    });
+
     service = TestBed.inject(PrescriptionsListService);
   });
 
-  describe('submitTransfer$', () => {
-    it('should return submitTransferSuccess action on successful transfer', async () => {
-      actions$ = of(PrescriptionsListActions.submitTransfer({ request: mockRequest }));
-
-      jest
-        .spyOn(service, 'submitTransfer')
-        .mockReturnValue(of(mockResponse));
-
-      const result = await firstValueFrom(effects.submitTransfer$);
-
-      expect(result).toEqual(
-        PrescriptionsListActions.submitTransferSuccess({
-          submitTransferResponse: mockResponse
-        })
-      );
-    });
-
-    it('should return submitTransferFailure action on failed transfer', async () => {
-      actions$ = of(PrescriptionsListActions.submitTransfer({ request: mockRequest }));
-
-      jest
-        .spyOn(service, 'submitTransfer')
-        .mockReturnValue(
-          throwError(() => errorMessage(effects.constructor.name, errorText))
-        );
-
-      const result = await firstValueFrom(effects.submitTransfer$);
-
-      expect(result).toEqual(
-        PrescriptionsListActions.submitTransferFailure({
-          error: errorMessage(effects.constructor.name, errorText)
-        })
-      );
-    });
+  it('should be created', () => {
+    expect(service).toBeTruthy();
   });
+
+  it('should submit transfer and return a response', () => {
+    // service.submitTransfer().subscribe(response => {
+    //   expect(response).toBeDefined();
+    //   done();
+    // })
+  });
+
+  //   it('should call post method of ExperienceService and process response', (done) => {
+  //     const mockResponse = { data: 'mockData' };
+  //     mockExperienceService.post.mockReturnValue(of(mockResponse));
+
+  //     jest.spyOn(global, 'mapResponseBody').mockImplementation(() => of(mockResponse));
+
+  //     service.submitTransfer().subscribe(response => {
+  //       expect(response).toEqual(mockResponse);
+  //       expect(mockExperienceService.post).toHaveBeenCalledWith(
+  //         Config.clientId,
+  //         Config.experiences,
+  //         Config.MOCK,
+  //         {},
+  //         { maxRequestTime: 10_000 }
+  //       )
+  //       done();
+  //     });
+  //   });
 });
