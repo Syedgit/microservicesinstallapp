@@ -13,6 +13,8 @@ import {
   Provider
 } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/submit-transfer';
 import { IPrescriptionDetails } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/current-prescriptions';
+import { Store } from '@ngrx/store';
+import { catchError, of, switchMap, tap } from 'rxjs';
 
 @Component({
   selector: 'lib-submit-transfer',
@@ -30,37 +32,34 @@ export class SubmitTransferComponent {
   };
 
   protected readonly store = inject(SubmitTransferStore);
-  currentPrescriptions: IPrescriptionDetails[] | undefined;
-  private selectedPharmacy: any;
   public errorMessage: string | null = null;
 
-  public submitTransfer(): void {
-    this.store.currentPrescriptions$.subscribe(
-      (data) => {
-        this.currentPrescriptions = data;
-        const transferOrderRequest = this.buildTransferOrderRequest();
+  constructor(private ngrxStore: Store) {}
 
+  public submitTransfer(): void {
+    this.ngrxStore.select('currentPrescriptions').pipe(
+      switchMap((data: IPrescriptionDetails[]) => {
+        const transferOrderRequest = this.buildTransferOrderRequest(data);
+        
         if (transferOrderRequest.data.externalTransfer.length > 0) {
-          try {
-            this.store.submitTransfer(transferOrderRequest);
-            this.handleSuccess(); // Handle success logic
-          } catch (error) {
-            this.handleError(error); // Handle error logic
-          }
+          return this.store.submitTransfer(transferOrderRequest).pipe(
+            tap(() => this.handleSuccess()), // Handle success
+            catchError((error) => {
+              this.handleError(error); // Handle error
+              return of(null); // Handle error case
+            })
+          );
         } else {
-          console.warn('No prescriptions selected for transfer.');
           this.errorMessage = 'No prescriptions selected for transfer.';
+          return of(null); // No prescriptions, no submission
         }
-      },
-      (error) => {
-        this.handleError(error);
-      }
-    );
+      })
+    ).subscribe();
   }
 
-  private buildTransferOrderRequest(): TransferOrderRequest {
-    const externalTransfer: ExternalTransfer[] = this.currentPrescriptions?.length
-      ? this.currentPrescriptions
+  private buildTransferOrderRequest(currentPrescriptions: IPrescriptionDetails[]): TransferOrderRequest {
+    const externalTransfer: ExternalTransfer[] = currentPrescriptions?.length
+      ? currentPrescriptions
           .map(prescription => {
             const rxDetails: RxDetails | null = this.mapRxDetails(prescription);
             if (rxDetails && rxDetails.drugDetails.length > 0) {
@@ -99,17 +98,22 @@ export class SubmitTransferComponent {
   }
 
   private mapRxDetails(prescription: any): RxDetails | null {
-    const uniqueDrugDetails: DrugDetails[] = [];
     const seenRxNumbers = new Set<string>();
     let fromPharmacy: Pharmacy | null = null;
 
-    prescription.prescriptionforPatient
+    // Using `map` to transform prescription data to drugDetails array
+    const uniqueDrugDetails: DrugDetails[] = prescription.prescriptionforPatient
       .filter((drug: any) => drug.isselected) // Only include selected prescriptions
-      .forEach((drug: any) => {
+      .map((drug: any) => {
         if (!seenRxNumbers.has(drug.id)) {
           seenRxNumbers.add(drug.id);
 
-          uniqueDrugDetails.push({
+          // If this is the first `fromPharmacy`, we map it
+          if (!fromPharmacy && drug.storeDetails) {
+            fromPharmacy = this.mapPharmacyDetails(drug.storeDetails);
+          }
+
+          return {
             drugName: drug.drugInfo.drug.name,
             encPrescriptionLookupKey: drug.prescriptionLookupKey,
             prescriptionLookupKey: this.mapPrescriptionLookupKey(drug),
@@ -117,13 +121,11 @@ export class SubmitTransferComponent {
             recentFillDate: drug.lastRefillDate,
             quantity: drug.quantity,
             daySupply: drug.daysSupply
-          });
-
-          if (drug.storeDetails && !fromPharmacy) {
-            fromPharmacy = this.mapPharmacyDetails(drug.storeDetails);
-          }
+          };
         }
-      });
+        return null; // Filter out duplicates or non-selected
+      })
+      .filter((drugDetail): drugDetail is DrugDetails => drugDetail !== null); // Remove nulls
 
     if (uniqueDrugDetails.length === 0 || !fromPharmacy) {
       return null; // Return null if no selected drug details or no fromPharmacy
@@ -144,55 +146,49 @@ export class SubmitTransferComponent {
       lastName: prescription.lastName,
       gender: prescription.gender,
       dateOfBirth: prescription.dateOfBirth,
-      memberId: prescription.id.toString(),
-      patientId: prescription.id.toString(),
+      memberId: prescription.id?.toString() || '', // Always return a value
+      patientId: prescription.id?.toString() || '', // Always return a value
       patientIdType: 'PBM_QL_PARTICIPANT_ID_TYPE',
       profileId: null,
-      email: prescription.emailAddresses?.[0]?.value || '',
-      address: {
-        line: [''],
-        city: '',
-        state: '',
-        postalCode: '',
-        phoneNumber: ''
-      } // Assuming no detailed address info available in currentPrescriptions
+      email: prescription.emailAddresses?.[0]?.value || '', // Default to an empty string
+      address: this.mapAddressDetails(prescription.address || {}) // Pass an empty object if no address is present
     };
   }
 
   private mapPrescriptionLookupKey(drug: any): PrescriptionLookupKey {
     return {
-      id: drug.id,
+      id: drug.id || '', // Ensure we always return a string, even if undefined
       idType: 'PBM_QL_PARTICIPANT_ID_TYPE',
-      rxNumber: drug.prescriptionLookupKey
+      rxNumber: drug.prescriptionLookupKey || '' // Default to an empty string
     };
   }
 
   private mapProviderDetails(prescriber: any): Provider {
     return {
-      npi: prescriber.npi || '',
-      firstName: prescriber.firstName,
-      lastName: prescriber.lastName,
-      phoneNumber: prescriber.phone,
-      faxNumber: prescriber.fax,
-      address: this.mapAddressDetails(prescriber.address)
+      npi: prescriber.npi || '', // Default to an empty string if undefined
+      firstName: prescriber.firstName || '', // Always return a string
+      lastName: prescriber.lastName || '', // Always return a string
+      phoneNumber: prescriber.phone || '', // Default to an empty string
+      faxNumber: prescriber.fax || '', // Default to an empty string
+      address: this.mapAddressDetails(prescriber.address || {}) // Pass an empty object if no address is present
     };
   }
 
   private mapPharmacyDetails(pharmacy: any): Pharmacy {
     return {
-      pharmacyName: pharmacy.pharmacyName,
-      address: this.mapAddressDetails(pharmacy.address),
-      storeId: pharmacy.storeId || ''
+      pharmacyName: pharmacy.pharmacyName || '', // Always return a string
+      address: this.mapAddressDetails(pharmacy.address || {}), // Pass an empty object if no address is present
+      storeId: pharmacy.storeId || '' // Default to an empty string
     };
   }
 
   private mapAddressDetails(address: any): Address {
     return {
-      line: address.line,
-      city: address.city,
-      state: address.state,
-      postalCode: address.postalCode,
-      phoneNumber: address.phoneNumber
+      line: address.line || [''], // Default to an empty array
+      city: address.city || '', // Always return a string
+      state: address.state || '', // Always return a string
+      postalCode: address.postalCode || '', // Always return a string
+      phoneNumber: address.phoneNumber || '' // Default to an empty string
     };
   }
 }
