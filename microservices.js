@@ -13,7 +13,6 @@ import {
   Provider
 } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/submit-transfer';
 import { IPrescriptionDetails } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/current-prescriptions';
-import { Store } from '@ngrx/store';
 import { catchError, of, switchMap, tap } from 'rxjs';
 
 @Component({
@@ -37,12 +36,12 @@ export class SubmitTransferComponent {
 
   protected readonly store = inject(SubmitTransferStore);
 
-  constructor(private ngrxStore: Store) {}
+  constructor() {}
 
   // Method to handle the submission of the transfer order
   public submitTransfer(): void {
-    // Selecting 'currentPrescriptions' from the store
-    this.ngrxStore.select('currentPrescriptions').pipe(
+    // Accessing the observable `currentPrescriptions$` from the store
+    this.store.currentPrescriptions$.pipe(
       // Using switchMap to handle the currentPrescriptions and continue the observable chain
       switchMap((data: IPrescriptionDetails[]) => {
         // Assigning the fetched data to the public variable `this.currentPrescriptions`
