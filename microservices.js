@@ -1,61 +1,95 @@
+import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { Actions } from '@ngrx/effects';
+import { ExperienceService } from '@digital-blocks/angular/core/util/services';
+import { errorMessage } from '@digital-blocks/core/util/error-handler';
 import { provideMockActions } from '@ngrx/effects/testing';
-import { of, throwError } from 'rxjs';
+import { provideMockStore } from '@ngrx/store/testing';
+import { Observable, firstValueFrom, of, throwError } from 'rxjs';
 
-import { PrescriptionsListService } from '../services';
+import { CurrentPrescriptionsService } from '../services/current-prescriptions.service';
 
-import { PrescriptionsListActions } from './prescriptions-list.actions';
-import { PrescriptionsListEffects } from './prescriptions-list.effects';
-import { ReportableError } from '@digital-blocks/core/util/error-handler';
+import { CurrentPrescriptionsActions } from './current-prescriptions.actions';
+import { CurrentPrescriptionsEffects } from './current-prescriptions.effects';
+import { getPrescriptionsForTransferResponse } from './mock-data/get-prescriptions-for-transfer-response.mock';
 
-describe('PrescriptionsListEffects', () => {
-  let actions$: Actions;
-  let effects: PrescriptionsListEffects;
-  let prescriptionsListService: PrescriptionsListService;
-
-  const mockError: ReportableError = {
-    message: 'Transfer failed',
-    tag: 'PrescriptionsList',
-  };
+describe('CurrentPrescriptionsEffects', () => {
+  let actions$: Observable<any>;
+  let effects: CurrentPrescriptionsEffects;
+  let service: CurrentPrescriptionsService;
+  const mockExperienceService = { post: jest.fn() };
+  const errorText = 'No prescription available';
 
   beforeEach(() => {
     TestBed.configureTestingModule({
+      imports: [HttpClientTestingModule],
       providers: [
-        PrescriptionsListEffects,
+        CurrentPrescriptionsEffects,
+        provideMockStore(),
         provideMockActions(() => actions$),
-        {
-          provide: PrescriptionsListService,
-          useValue: {
-            submitTransfer: jest.fn()
-          }
-        }
+        CurrentPrescriptionsService,
+        { provide: ExperienceService, useValue: mockExperienceService }
       ]
     });
-
-    effects = TestBed.inject(PrescriptionsListEffects);
-    prescriptionsListService = TestBed.inject(PrescriptionsListService);
+    effects = TestBed.inject(CurrentPrescriptionsEffects);
+    service = TestBed.inject(CurrentPrescriptionsService);
   });
 
-  describe('submitTransfer$', () => {
-    it('should return submitTransferFailure action on failed transfer', (done) => {
-      // Mocking the action stream
-      actions$ = of(PrescriptionsListActions.submitTransfer({ request: {} }));
+  describe('getCurrentPrescriptions$', () => {
+    it('should return the getCurrentPrescriptionsSuccess action when ngrxOnInitEffects loads prescription data successfully', async () => {
+      const mockApiResponse =
+        service.constructMemberDetailsFromGetPrescriptionResponse(
+          getPrescriptionsForTransferResponse.data.getLinkedMemberPatients
+        );
+      const expectedAction =
+        CurrentPrescriptionsActions.getCurrentPrescriptionsSuccess({
+          currentPrescriptions: mockApiResponse
+        });
 
-      // Mock the service to throw an error
-      (prescriptionsListService.submitTransfer as jest.Mock).mockReturnValue(throwError(() => mockError));
+      actions$ = of(CurrentPrescriptionsActions.getCurrentPrescriptions());
 
-      // Subscribe to the effect
-      effects.submitTransfer$.subscribe({
-        next: (action) => {
-          // Expect a failure action
-          expect(action).toEqual(
-            PrescriptionsListActions.submitTransferFailure({ error: mockError })
-          );
-          done(); // Signal the test is done
-        },
-        error: (error) => {
-          done.fail(error); // In case of error, fail the test
+      jest
+        .spyOn(service, 'getPrescriptionsForTransferExperienceApi')
+        .mockReturnValue(of(mockApiResponse));
+
+      expect(await firstValueFrom(effects.getCurrentPrescriptions$)).toEqual(
+        expectedAction
+      );
+    });
+
+    it('should return the getCurrentPrescriptionsFailure action when ngrxOnInitEffects loads prescription data with empty member', async () => {
+      actions$ = of(CurrentPrescriptionsActions.getCurrentPrescriptions());
+
+      jest
+        .spyOn(service, 'getPrescriptionsForTransferExperienceApi')
+        .mockReturnValue(of([]));
+
+      expect(
+        await firstValueFrom(effects.getCurrentPrescriptions$)
+      ).toMatchObject({
+        error: {
+          tag: '[CurrentPrescriptionsEffects]',
+          message: errorText
+        }
+      });
+    });
+
+    it('should return the getCurrentPrescriptionsFailure action when ngrxOnInitEffects loads get prescription fails', async () => {
+      actions$ = of(CurrentPrescriptionsActions.getCurrentPrescriptions());
+
+      jest
+        .spyOn(service, 'getPrescriptionsForTransferExperienceApi')
+        .mockReturnValue(
+          throwError(() => {
+            return errorMessage(effects.constructor.name, errorText);
+          })
+        );
+
+      expect(
+        await firstValueFrom(effects.getCurrentPrescriptions$)
+      ).toMatchObject({
+        error: {
+          tag: '[CurrentPrescriptionsEffects]',
+          message: errorText
         }
       });
     });
