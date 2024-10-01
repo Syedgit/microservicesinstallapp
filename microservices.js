@@ -1,42 +1,105 @@
- public submitTransfer(): void {
-    this.store.currentPrescriptions$.pipe(
-      switchMap((data: IPrescriptionDetails[] | undefined) => {
-        this.currentPrescriptions = data || [];
- 
-        Iif (this.currentPrescriptions.length > 0) {
-          const transferOrderRequest = this.buildTransferOrderRequest(this.currentPrescriptions);
-          this.store.submitTransfer(transferOrderRequest);
- 
-          this.store.submitTransferResponse$.subscribe((response) => {
-            Iif (response) {
-              if (response.statusCode === '0000') {
-                this.handleSuccess();
-              } else {
-                this.handleError(response);
-              }
-            }
-          });
- 
-          return of(null);
-        } else {
-          this.errorMessage = 'No prescriptions selected for transfer.';
-          return of(null);
-        }
-      })
-    ).subscribe();
-  }
+import { of } from 'rxjs';
+import { TransferOrderRequest } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/prescriptions-list';
 
-component.specs.ts
+describe('SubmitTransferComponent', () => {
+  let component: SubmitTransferComponent;
+  let store: SubmitTransferStore;
+  let fixture: ComponentFixture<SubmitTransferComponent>;
 
- it('should handle a successful transfer submission', () => {
-      // const spySubmit = jest.spyOn(component, 'submitTransfer');
-       const expectedRequest: TransferOrderRequest = component.buildTransferOrderRequest(currentPrescriptions);
-      // store.currentPrescriptions$.subscribe(() => {
-      //   expect(spySubmit).toHaveBeenCalled();
-      // });
-      component.submitTransfer();
-      const spySubmitTransfer = jest.spyOn(store, 'submitTransfer').mockImplementation(() => {});
-      store.submitTransfer(() => {
-        expect(spySubmitTransfer).toHaveBeenCalledWith(expectedRequest);
-      });
-    });
+  beforeEach(() => {
+    fixture = TestBed.createComponent(SubmitTransferComponent);
+    component = fixture.componentInstance;
+    store = TestBed.inject(SubmitTransferStore);
+  });
+
+  it('should handle a successful transfer submission', () => {
+    const currentPrescriptions = [
+      {
+        id: 7389902,
+        prescriptionforPatient: [
+          {
+            isSelected: true,
+            id: '133225401',
+            drugInfo: { drug: { name: 'Drug 1' } },
+            prescriptionLookupKey: 'lookupKey1',
+            prescriber: { firstName: 'John', lastName: 'Doe' },
+            storeDetails: { pharmacyName: 'Pharmacy 1' }
+          }
+        ]
+      }
+    ];
+
+    const expectedRequest: TransferOrderRequest = component.buildTransferOrderRequest(currentPrescriptions);
+
+    // Mock currentPrescriptions$ to return mock data
+    jest.spyOn(store, 'currentPrescriptions$').mockReturnValue(of(currentPrescriptions));
+
+    // Mock submitTransferResponse$ to return success response
+    jest.spyOn(store, 'submitTransferResponse$').mockReturnValue(
+      of({ statusCode: '0000', statusDescription: 'Success' })
+    );
+
+    // Spy on submitTransfer and handleSuccess
+    const spySubmitTransfer = jest.spyOn(store, 'submitTransfer').mockImplementation(() => {});
+    const spyHandleSuccess = jest.spyOn(component, 'handleSuccess');
+
+    // Call the method
+    component.submitTransfer();
+
+    // Check if submitTransfer is called with the correct request
+    expect(spySubmitTransfer).toHaveBeenCalledWith(expectedRequest);
+    // Check if handleSuccess is called
+    expect(spyHandleSuccess).toHaveBeenCalled();
+  });
+
+  it('should handle no prescriptions selected for transfer', () => {
+    // Mock currentPrescriptions$ to return an empty array
+    jest.spyOn(store, 'currentPrescriptions$').mockReturnValue(of([]));
+
+    // Call the method
+    component.submitTransfer();
+
+    // Check if the error message is set
+    expect(component.errorMessage).toBe('No prescriptions selected for transfer.');
+  });
+
+  it('should handle a failed transfer submission', () => {
+    const currentPrescriptions = [
+      {
+        id: 7389902,
+        prescriptionforPatient: [
+          {
+            isSelected: true,
+            id: '133225401',
+            drugInfo: { drug: { name: 'Drug 1' } },
+            prescriptionLookupKey: 'lookupKey1',
+            prescriber: { firstName: 'John', lastName: 'Doe' },
+            storeDetails: { pharmacyName: 'Pharmacy 1' }
+          }
+        ]
+      }
+    ];
+
+    const expectedRequest: TransferOrderRequest = component.buildTransferOrderRequest(currentPrescriptions);
+
+    // Mock currentPrescriptions$ to return mock data
+    jest.spyOn(store, 'currentPrescriptions$').mockReturnValue(of(currentPrescriptions));
+
+    // Mock submitTransferResponse$ to return error response
+    jest.spyOn(store, 'submitTransferResponse$').mockReturnValue(
+      of({ statusCode: '5000', statusDescription: 'Error occurred' })
+    );
+
+    // Spy on submitTransfer and handleError
+    const spySubmitTransfer = jest.spyOn(store, 'submitTransfer').mockImplementation(() => {});
+    const spyHandleError = jest.spyOn(component, 'handleError');
+
+    // Call the method
+    component.submitTransfer();
+
+    // Check if submitTransfer is called with the correct request
+    expect(spySubmitTransfer).toHaveBeenCalledWith(expectedRequest);
+    // Check if handleError is called with the error response
+    expect(spyHandleError).toHaveBeenCalledWith({ statusCode: '5000', statusDescription: 'Error occurred' });
+  });
+});
