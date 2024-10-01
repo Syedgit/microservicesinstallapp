@@ -1,29 +1,51 @@
 import { of } from 'rxjs';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideMockStore, MockStore } from '@ngrx/store/testing';
-import { SubmitTransferComponent } from './submit-transfer.component';
-import { SubmitTransferStore } from './submit-transfer.store';
-import { TransferOrderRequest, SubmitTransferResponse } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/prescriptions-list';
-import { IPrescriptionDetails } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/current-prescriptions';
+import { IPrescriptionDetails } from '@your-app-path';  // Adjust the import path as needed
+import { SubmitTransferResponse, TransferOrderRequest } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/prescriptions-list';
 
 describe('SubmitTransferComponent', () => {
   let component: SubmitTransferComponent;
-  let fixture: ComponentFixture<SubmitTransferComponent>;
   let store: SubmitTransferStore;
-  let mockStore: MockStore;
-
+  
   const currentPrescriptionsMock: IPrescriptionDetails[] = [
     {
-      id: 7389902,
+      id: '7389902',
       firstName: 'John',
       lastName: 'Doe',
       dateOfBirth: '01/01/1990',
+      gender: '1',
+      emailAddresses: [{ value: 'john.doe@example.com' }],
       prescriptionforPatient: [
         {
           isSelected: true,
-          drugInfo: { drug: { name: 'Drug 1' } },
+          id: '133225401',
+          drugInfo: {
+            drug: {
+              name: 'Drug 1'
+            }
+          },
           prescriptionLookupKey: 'lookupKey1',
-          prescriber: { firstName: 'Brian', lastName: 'BAALI', npi: '1234567890' }
+          prescriber: {
+            firstName: 'Brian',
+            lastName: 'BAALI',
+            npi: '1234567890',
+            address: {
+              line: ['123 Main St'],
+              city: 'Town',
+              state: 'CA',
+              postalCode: '90210',
+              phoneNumber: '123-456-7890'
+            }
+          },
+          storeDetails: {
+            pharmacyName: 'Pharmacy 1',
+            address: {
+              line: ['456 Other St'],
+              city: 'City',
+              state: 'CA',
+              postalCode: '90210',
+              phoneNumber: '987-654-3210'
+            }
+          }
         }
       ]
     }
@@ -32,46 +54,29 @@ describe('SubmitTransferComponent', () => {
   const successResponse: SubmitTransferResponse = {
     statusCode: '0000',
     statusDescription: 'Success',
-    data: [
-      {
-        statusCode: '0000',
-        statusDescription: 'Success',
-        confirmationNumber: 'WE202409251821481QRP'
-      }
-    ]
+    data: []
   };
 
-  beforeEach(async () => {
-    await TestBed.configureTestingModule({
-      providers: [
-        SubmitTransferStore,
-        provideMockStore({ initialState: {} })
-      ]
-    }).compileComponents();
+  beforeEach(() => {
+    // Mock store observables
+    jest.spyOn(store, 'currentPrescriptions$').mockReturnValue(of(currentPrescriptionsMock));
+    jest.spyOn(store, 'submitTransferResponse$').mockReturnValue(of(successResponse));
 
-    fixture = TestBed.createComponent(SubmitTransferComponent);
-    component = fixture.componentInstance;
-    store = TestBed.inject(SubmitTransferStore);
-    mockStore = TestBed.inject(MockStore);
+    // Mock submitTransfer
+    jest.spyOn(store, 'submitTransfer').mockImplementation(() => {});
   });
 
   it('should handle a successful transfer submission', () => {
-    // Mock the currentPrescriptions$ observable
-    jest.spyOn(store, 'currentPrescriptions$').mockReturnValue(of(currentPrescriptionsMock));
+    // Build expected transfer request
+    const expectedRequest: TransferOrderRequest = component.buildTransferOrderRequest(currentPrescriptionsMock);
 
-    // Mock the submitTransfer method
-    const spySubmitTransfer = jest.spyOn(store, 'submitTransfer').mockImplementation(() => {});
-
-    // Mock the submitTransferResponse$ observable to simulate a successful response
-    jest.spyOn(store, 'submitTransferResponse$').mockReturnValue(of(successResponse));
-
+    // Call the submitTransfer method
     component.submitTransfer();
 
-    // Check if submitTransfer was called with the correct request
-    const expectedRequest: TransferOrderRequest = component.buildTransferOrderRequest(currentPrescriptionsMock);
-    expect(spySubmitTransfer).toHaveBeenCalledWith(expectedRequest);
+    // Verify submitTransfer was called with the expected request
+    expect(store.submitTransfer).toHaveBeenCalledWith(expectedRequest);
 
-    // Simulate the success handling
+    // Verify that errorMessage is null, meaning the transfer was successful
     expect(component.errorMessage).toBeNull();
   });
 });
