@@ -4,6 +4,7 @@ import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import { SubmitTransferComponent } from './submit-transfer.component';
 import { SubmitTransferStore } from './submit-transfer.store';
 import { TransferOrderRequest, SubmitTransferResponse } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/prescriptions-list';
+import { IPrescriptionDetails } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/current-prescriptions';
 
 describe('SubmitTransferComponent', () => {
   let component: SubmitTransferComponent;
@@ -11,7 +12,7 @@ describe('SubmitTransferComponent', () => {
   let store: SubmitTransferStore;
   let mockStore: MockStore;
 
-  const currentPrescriptionsMock = [
+  const currentPrescriptionsMock: IPrescriptionDetails[] = [
     {
       id: 7389902,
       firstName: 'John',
