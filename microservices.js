@@ -15,7 +15,9 @@ import {
   Address,
   DrugDetails,
   PrescriptionLookupKey,
-  Provider
+  Provider,
+  IDrugDetails,
+  IPatientDrugDetails
 } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/prescriptions-list';
 import { IPrescriber, IPrescriptionDetails, IPrescriptionforPatient } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/current-prescriptions';
 import { of, switchMap } from 'rxjs';
@@ -126,30 +128,25 @@ export class SubmitTransferComponent {
 
   public mapRxDetails(member: IPrescriptionDetails): RxDetails | null {
     const seenRxNumbers = new Set<string>();
-    let fromPharmacy: Pharmacy | null;
+    let fromPharmacy: Pharmacy | null = null;
 
     const uniqueDrugDetails: DrugDetails[] = member.prescriptionforPatient
       .filter((drug: IPrescriptionforPatient) => drug.isSelected)
-      .map((drug: any) => {
+      .map((drug: IPatientDrugDetails) => {
         if (!seenRxNumbers.has(drug.id)) {
           seenRxNumbers.add(drug.id);
-
           if (!fromPharmacy && drug.storeDetails) {
-              /* eslint-disable @typescript-eslint/no-explicit-any -- todo fix*/
-            fromPharmacy = drug.storeDetails
-              ? this.mapPharmacyDetails(drug.storeDetails)
-              : null;
+            fromPharmacy = this.mapPharmacyDetails(drug.storeDetails);
           }
-
           return {
-            drugName: drug.drugInfo.drug.name || '',
+            drugName: drug.drugInfo?.drug.name || '',
             encPrescriptionLookupKey: drug.prescriptionLookupKey || '',
             prescriptionLookupKey: this.mapPrescriptionLookupKey(member, drug),
             provider: drug.prescriber
               ? this.mapProviderDetails(drug.prescriber)
               : null,
             recentFillDate: drug.lastRefillDate || '',
-            daySupply: drug.daysSupply || ''
+            daySupply: drug.daysSupply || 0
           };
         }
         return null;
@@ -157,17 +154,19 @@ export class SubmitTransferComponent {
       .filter(
         (drugDetail: any): drugDetail is DrugDetails => drugDetail !== null
       );
-
-    fromPharmacy = {
-      pharmacyName: 'ALLIANCERX WALGREENS PRIME 16280',
-      address: {
-        line: ['GREY 1 CVS DRIVE'],
-        city: 'WOONSOCKET',
-        state: 'RI',
-        postalCode: '02895',
-        phoneNumber: '8005414959'
+      if(!fromPharmacy) {
+        fromPharmacy = {
+          pharmacyName: 'ALLIANCERX WALGREENS PRIME 16280',
+          address: {
+            line: ['GREY 1 CVS DRIVE'],
+            city: 'WOONSOCKET',
+            state: 'RI',
+            postalCode: '02895',
+            phoneNumber: '8005414959'
+          }
+        };
       }
-    };
+      
     if (uniqueDrugDetails.length === 0 || !fromPharmacy) {
       return null;
     }
@@ -239,7 +238,9 @@ export class SubmitTransferComponent {
 }
 
 
-submit-transfer.types.ts 
+interface.ts
+
+import { IDrugDetails, IPrescriber } from "../../../current-prescriptions/src/lib/current-prescriptions.types";
 
 export interface TransferOrderRequest {
   data: TransferData;
@@ -291,7 +292,7 @@ export interface DrugDetails {
   drugName: string;
   encPrescriptionLookupKey: string;
   prescriptionLookupKey: PrescriptionLookupKey;
-  provider: Provider;
+  provider: Provider | null;
   recentFillDate: string;
   quantity: number;
   daySupply: number;
@@ -334,132 +335,13 @@ export interface SubmitExternalTransferResource {
   confirmationNumber: string;
 }
 
-
-current-prescriotions.types.ts 
-
-export interface IPrescriptionDetails {
-  id: string;
-  idType: string;
-  memberType: string;
-  firstName: string;
-  lastName: string;
-  personCode: string;
-  gender: string;
-  dateOfBirth: string;
-  emailAddresses: IEmailAddress[];
-  prescriptionforPatient: IPrescriptionforPatient[];
-  address: string;
-}
-
-export interface Address {
-  line: string[];
-  city: string;
-  state: string;
-  postalCode: string;
-  phoneNumber?: string;
-}
-
-export interface GetPrescriptionsForTransferResponse {
-  statusCode: string;
-  statusDescription: string;
-  data: IResponseData;
-}
-
-export interface IResponseData {
-  getLinkedMemberPatients: ILinkedMemberPatient[];
-  getAddressByProfileId: IMemberAddress[];
-  externalTransferStatusByPatient?: IExternalTransferStatus;
-}
-
-export interface IPrescriptionforPatient {
+export interface IPatientDrugDetails {
   isSelected?: boolean;
   id: string;
   drugInfo?: IDrugDetails;
   prescriber?: IPrescriber;
-}
-
-export interface IDrugDetails {
-  drug: {
-    name: string;
-    ndcId: string;
-    isMaintenance: boolean | null;
-  };
-}
-
-export interface ILinkedMemberPatient {
-  id: string;
-  idType: string;
-  memberType: string;
-  patient: IPatientDataFromResponse;
-}
-
-export interface IPatientDataFromResponse {
-  id: string;
-  firstName: string;
-  lastName: string;
-  personCode: string;
-  gender: string;
-  dateOfBirth: string;
-  emailAddresses: IEmailAddress[];
-  prescriptionforPatient: IPrescriptionforPatient[];
-}
-
-export interface IPrescriber {
-  firstName: string | null;
-  lastName: string | null;
-  phoneNumber?: string | null;
-  faxNumber?: string | null;
-  address: Address;
-  npi: string | null;
-}
-
-export interface IErrorMessageData {
-  heading?: string;
-  description?: string;
-}
-
-export interface IEmailAddress {
-  value: string;
-  system?: string;
-  valid?: string;
-}
-
-export interface IMemberAddress {
-  line: string[];
-  city: string;
-  state: string;
-  postalCode: string;
-  isDefault?: boolean;
-  phoneNumber?: string | null;
-}
-
-export interface IExternalTransferStatus {
-  externalTransferDetails: IExternalTransferDetail[];
-}
-
-export interface IExternalTransferDetail {
-  requestedDate: string;
-  patient: {
-    patientId: string;
-    patientIdType?: string;
-    firstName?: string;
-    lastName?: string;
-    dateOfBirth?: string;
-  };
-  transferRxStatus: ITransferRxStatus[];
-}
-
-export interface ITransferRxStatus {
-  drugName: string;
-  recentFillDate: string;
-  quantity: number;
-  daySupply: number;
-  statusCode: string;
-  statusTitle: string;
-  statusDesc: string;
-  prescription: {
-    id: string;
-    idType?: string;
-    storeNumber?: string | null;
-  };
+  prescriptionLookupKey: string;
+  lastRefillDate: string;
+  daysSupply: number;
+  storeDetails: Pharmacy;
 }
