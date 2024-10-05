@@ -89,39 +89,43 @@ export class SubmitTransferComponent {
         )
         .subscribe();
     } catch (error) {
-      this.errorMessage = 'An unexpected error occurred during submission.';
+      this.errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
     }
   }
 
   public buildTransferOrderRequest(
     currentPrescriptions: IPrescriptionDetails[]
   ): TransferOrderRequest {
-    const externalTransfer: ExternalTransfer[] = currentPrescriptions?.length
-      ? currentPrescriptions
-          .map((prescription) => {
-            const rxDetails: RxDetails | null = this.mapRxDetails(prescription);
-            if (rxDetails && rxDetails.drugDetails.length > 0) {
-              const patient: Patient = this.mapPatientDetails(prescription);
-              return {
-                requestedChannel: '',
-                carrierId: '',
-                clinicalRuleDate: this.getCurrentDate(),
-                patient,
-                rxDetails: [rxDetails]
-              };
-            }
-            return null;
-          })
-          .filter((transfer): transfer is ExternalTransfer => transfer !== null)
-      : [];
+    try {
+      const externalTransfer: ExternalTransfer[] = currentPrescriptions?.length
+        ? currentPrescriptions
+            .map((prescription) => {
+              const rxDetails: RxDetails | null = this.mapRxDetails(prescription);
+              if (rxDetails && rxDetails.drugDetails.length > 0) {
+                const patient: Patient = this.mapPatientDetails(prescription);
+                return {
+                  requestedChannel: '',
+                  carrierId: '',
+                  clinicalRuleDate: this.getCurrentDate(),
+                  patient,
+                  rxDetails: [rxDetails]
+                };
+              }
+              return null;
+            })
+            .filter((transfer): transfer is ExternalTransfer => transfer !== null)
+        : [];
 
-    return {
-      data: {
-        idType: 'PBM_QL_PARTICIPANT_ID_TYPE',
-        profile: null,
-        externalTransfer
-      }
-    };
+      return {
+        data: {
+          idType: 'PBM_QL_PARTICIPANT_ID_TYPE',
+          profile: null,
+          externalTransfer
+        }
+      };
+    } catch (error) {
+      throw new Error('Error building transfer order request.');
+    }
   }
 
   public handleError(error: any): void {
@@ -129,42 +133,47 @@ export class SubmitTransferComponent {
   }
 
   public mapRxDetails(member: IPrescriptionDetails): RxDetails | null {
-    const seenRxNumbers = new Set<string>();
-    let fromPharmacy: Pharmacy | null = null;
+    try {
+      const seenRxNumbers = new Set<string>();
+      let fromPharmacy: Pharmacy | null = null;
 
-    const uniqueDrugDetails: DrugDetails[] = member.prescriptionforPatient
-      .filter((drug: IPrescriptionforPatient) => drug.isSelected)
-      .map((drug: any) => {
-        if (!seenRxNumbers.has(drug.id)) {
-          seenRxNumbers.add(drug.id);
-          if (!fromPharmacy && drug.storeDetails) {
-            fromPharmacy = this.mapPharmacyDetails(drug.storeDetails);
+      const uniqueDrugDetails: DrugDetails[] = member.prescriptionforPatient
+        .filter((drug: IPrescriptionforPatient) => drug.isSelected)
+        .map((drug: any) => {
+          if (!seenRxNumbers.has(drug.id)) {
+            seenRxNumbers.add(drug.id);
+            if (!fromPharmacy && drug.storeDetails) {
+              fromPharmacy = this.mapPharmacyDetails(drug.storeDetails);
+            }
+            return {
+              drugName: drug.drugInfo?.drug.name || '',
+              encPrescriptionLookupKey: drug.prescriptionLookupKey || '',
+              prescriptionLookupKey: this.mapPrescriptionLookupKey(member, drug),
+              provider: drug.prescriber
+                ? this.mapProviderDetails(drug.prescriber)
+                : null,
+              recentFillDate: this.formatDate(drug.lastRefillDate) || '',
+              daySupply: drug.daysSupply || 0
+            };
           }
-          return {
-            drugName: drug.drugInfo?.drug.name || '',
-            encPrescriptionLookupKey: drug.prescriptionLookupKey || '',
-            prescriptionLookupKey: this.mapPrescriptionLookupKey(member, drug),
-            provider: drug.prescriber
-              ? this.mapProviderDetails(drug.prescriber)
-              : null,
-            recentFillDate: this.formatDate(drug.lastRefillDate) || '',
-            daySupply: drug.daysSupply || 0
-          };
-        }
-        return null;
-      })
-      .filter((drugDetail: DrugDetails | null): drugDetail is DrugDetails => !!drugDetail);
+          return null;
+        })
+        .filter((drugDetail: DrugDetails | null): drugDetail is DrugDetails => !!drugDetail);
 
-    if (!fromPharmacy) {
-      fromPharmacy = this.mapPharmacyDetails(this.selectedPharmacy);
+      if (!fromPharmacy) {
+        fromPharmacy = this.mapPharmacyDetails(this.selectedPharmacy);
+      }
+
+      const toPharmacy: Pharmacy = this.mapPharmacyDetails(this.selectedPharmacy);
+
+      return uniqueDrugDetails.length > 0 ? { drugDetails: uniqueDrugDetails, fromPharmacy, toPharmacy } : null;
+    } catch (error) {
+      throw new Error('Error mapping prescription details.');
     }
-
-    const toPharmacy: Pharmacy = this.mapPharmacyDetails(this.selectedPharmacy);
-
-    return uniqueDrugDetails.length > 0 ? { drugDetails: uniqueDrugDetails, fromPharmacy, toPharmacy } : null;
   }
 
   public mapPatientDetails(member: IPrescriptionDetails): Patient {
+    if (!member) throw new Error('Missing member details.');
     return {
       firstName: member?.firstName ?? '',
       lastName: member?.lastName ?? '',
@@ -179,7 +188,8 @@ export class SubmitTransferComponent {
     };
   }
 
-  public mapPharmacyDetails(pharmacy: Pharmacy): Pharmacy {
+  public mapPharmacyDetails(pharmacy: Pharmacy | null): Pharmacy {
+    if (!pharmacy) throw new Error('Missing pharmacy details.');
     return {
       pharmacyName: pharmacy?.pharmacyName ?? '',
       address: this.mapAddressDetails(pharmacy?.address),
@@ -198,7 +208,8 @@ export class SubmitTransferComponent {
     };
   }
 
-  public mapProviderDetails(prescriber: IPrescriber): Provider {
+  public mapProviderDetails(prescriber: IPrescriber | null): Provider {
+    if (!prescriber) throw new Error('Missing prescriber details.');
     return {
       npi: prescriber?.npi ?? '',
       firstName: prescriber?.firstName ?? '',
@@ -209,7 +220,8 @@ export class SubmitTransferComponent {
     };
   }
 
-  public mapAddressDetails(address: Address): Address {
+  public mapAddressDetails(address: Address | null): Address {
+    if (!address) throw new Error('Missing address details.');
     return {
       line: address?.line || [''],
       city: address?.city ?? '',
