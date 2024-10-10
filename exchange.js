@@ -1,38 +1,43 @@
-public mapPharmacyDetails(pharmacy: any): Pharmacy {
-  if (!pharmacy) {
-    this.errorMessage = 'Missing pharmacy details.';
-    throw new Error(this.errorMessage);
-  }
+public buildTransferOrderRequest(
+    currentPrescriptions: IPrescriptionDetails[]
+  ): TransferOrderRequest {
+    try {
+      const externalTransfer: ExternalTransfer[] =
+        currentPrescriptions.length > 0
+          ? currentPrescriptions
+              .map((member) => {
+                const rxDetails: RxDetails | null = this.mapRxDetails(member);
 
-  const pharmacyName = pharmacy.pharmacyName || '';
-  const address = pharmacy.address 
-    ? this.mapAddressDetails(pharmacy.address) 
-    : pharmacy.addresses 
-      ? this.mapAddressDetails(pharmacy.addresses) 
-      : undefined;
-  const storeId = pharmacy.storeId || '';
+                if (rxDetails && rxDetails.drugDetails.length > 0) {
+                  const patient: Patient = this.mapPatientDetails(member);
 
-  // Check if the pharmacy name contains "cvs" (case-insensitive)
-  const containsCVS = pharmacyName.toLowerCase().includes('cvs');
+                  return {
+                    requestedChannel: '',
+                    carrierId: member.carrierID,
+                    clinicalRuleDate: this.getCurrentDate(),
+                    patient,
+                    rxDetails: [rxDetails]
+                  };
+                }
 
-  // Define additional fields only if the pharmacy name contains "cvs"
-  const cvsSpecificFields = containsCVS ? {
-    open24Hours: pharmacy.open24Hours || false,
-    indicatorPharmacyTwentyFourHoursOpen: pharmacy.open24Hours ? 'Y' : 'N',
-    instorePickupService: pharmacy.instorePickupService === 'Y' ? 'Y' : 'N',
-    indicatorDriveThruService: pharmacy.indicatorDriveThruService === 'Y' ? 'Y' : 'N',
-    pharmacyHours: {
-      dayHours: pharmacy.open24Hours ? [] : pharmacy.pharmacyHours?.dayHours || [] // If open24Hours is true, return empty dayHours, else use existing dayHours
+                return null;
+              })
+              .filter(
+                (transfer): transfer is ExternalTransfer => transfer !== null
+              )
+          : [];
+        
+
+      return {
+        data: {
+          idType: 'PBM_QL_PARTICIPANT_ID_TYPE',
+          profile: '',
+          externalTransfer
+        }
+      };
+    } catch (error) {
+      this.store.setStateFailure(true);
+      errorMessage('Error building transfer order request', error);
+      throw error;
     }
-  } : null;
-
-  // Build the pharmacy details object
-  const pharmacyDetails: Pharmacy = {
-    pharmacyName,
-    address,
-    storeId,
-    ...(cvsSpecificFields ?? {}) // Spread CVS-specific fields only if they exist
-  };
-
-  return pharmacyDetails;
-}
+  }
