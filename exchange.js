@@ -1,66 +1,11 @@
-
-this.selected = {
-                            "pharmacyName": "CVS PHARMACY",
-                            "storeId": "68735",
-                            "address": {
-                                "line": [
-                                    "GREY 1 CVS DRIVE"
-                                ],
-                                "city": "WOONSOCKET",
-                                "state": "RI",
-                                "postalCode": "02895",
-                                "phoneNumber": "8005414959"
-                            },
-                            "instorePickupService": "Y",
-                            "indicatorDriveThruService": "Y",
-                            "indicatorPharmacyTwentyFourHoursOpen": "N",
-                            "pharmacyHours": {
-                                "dayHours": [
-                                    {
-                                        "day": "MON",
-                                        "hours": "08:00 AM - 09:00 PM"
-                                    },
-                                    {
-                                        "day": "TUE",
-                                        "hours": "08:00 AM - 09:00 PM"
-                                    },
-                                    {
-                                        "day": "WED",
-                                        "hours": "08:00 AM - 09:00 PM"
-                                    },
-                                    {
-                                        "day": "THU",
-                                        "hours": "08:00 AM - 09:00 PM"
-                                    },
-                                    {
-                                        "day": "FRI",
-                                        "hours": "08:00 AM - 09:00 PM"
-                                    },
-                                    {
-                                        "day": "SAT",
-                                        "hours": "09:00 AM - 06:00 PM"
-                                    },
-                                    {
-                                        "day": "SUN",
-                                        "hours": "10:00 AM - 05:00 PM"
-                                    }
-                                ]
-                            }
-                        }
-
-
-interface.ts
-
 export interface Pharmacy {
-  maintenanceChoice?: boolean;
-  nationalProviderId?: string;
-  nintyDayRetail?: boolean;
   pharmacyName?: string;
-  distance?: number;
-  rxM90Pharmacy?: boolean;
-  addresses?: PharmacyAddress;
   address?: PharmacyAddress;
   storeId?: string;
+  instorePickupService?: string;
+  indicatorDriveThruService?: string;
+  indicatorPharmacyTwentyFourHoursOpen?: string;
+  pharmacyHours?: PharmacyHours;
 }
 
 export interface PharmacyAddress {
@@ -73,38 +18,59 @@ export interface PharmacyAddress {
   postalCodeSuffix?: string | null;
 }
 
+export interface PharmacyHours {
+  dayHours: DayHours[];
+}
 
-
-
+export interface DayHours {
+  day: string;
+  hours: string;
+}
 
 
 public mapPharmacyDetails(pharmacy: any): Pharmacy {
-    if (!pharmacy) {
-      this.errorMessage = 'Missing pharmacy details.';
-      throw new Error(this.errorMessage);
-    }
-
-    let pharmacyName = '';
-    let address: Address | undefined;
-    let storeId = '';
-
-    if (pharmacy.pharmacyName) {
-      pharmacyName = pharmacy.pharmacyName;
-    }
-
-    if (pharmacy.address) {
-      address = this.mapAddressDetails(pharmacy.address);
-    } else if (pharmacy.addresses) {
-      address = this.mapAddressDetails(pharmacy.addresses);
-    }
-
-    if (pharmacy.storeId) {
-      storeId = pharmacy.storeId;
-    }
-
-    return {
-      pharmacyName,
-      address,
-      storeId
-    };
+  if (!pharmacy) {
+    this.errorMessage = 'Missing pharmacy details.';
+    throw new Error(this.errorMessage);
   }
+
+  let pharmacyName = '';
+  let address: Address | undefined;
+  let storeId = '';
+  let instorePickupService: string | undefined;
+  let indicatorDriveThruService: string | undefined;
+  let indicatorPharmacyTwentyFourHoursOpen: string | undefined;
+  let pharmacyHours: PharmacyHours | undefined;
+
+  if (pharmacy.pharmacyName) {
+    pharmacyName = pharmacy.pharmacyName;
+  }
+
+  if (pharmacy.address) {
+    address = this.mapAddressDetails(pharmacy.address);
+  } else if (pharmacy.addresses) {
+    address = this.mapAddressDetails(pharmacy.addresses);
+  }
+
+  if (pharmacy.storeId) {
+    storeId = pharmacy.storeId;
+  }
+
+  // Add additional fields if pharmacyName contains "CVS PHARMACY"
+  if (pharmacyName.toUpperCase().includes('CVS PHARMACY')) {
+    instorePickupService = pharmacy.instorePickupService;
+    indicatorDriveThruService = pharmacy.indicatorDriveThruService;
+    indicatorPharmacyTwentyFourHoursOpen = pharmacy.indicatorPharmacyTwentyFourHoursOpen;
+    pharmacyHours = pharmacy.pharmacyHours;
+  }
+
+  return {
+    pharmacyName,
+    address,
+    storeId,
+    instorePickupService,
+    indicatorDriveThruService,
+    indicatorPharmacyTwentyFourHoursOpen,
+    pharmacyHours
+  };
+}
