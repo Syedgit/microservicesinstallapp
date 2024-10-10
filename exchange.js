@@ -12,23 +12,25 @@ public mapPharmacyDetails(pharmacy: any): Pharmacy {
       : undefined;
   const storeId = pharmacy.storeId || '';
 
-  // Set indicators based on ternary conditions
-  const open24Hours = pharmacy.open24Hours || false;
-  const indicatorPharmacyTwentyFourHoursOpen = open24Hours ? 'Y' : 'N';
-  const instorePickupService = pharmacy.instorePickupService === 'Y' ? 'Y' : 'N';
-  const indicatorDriveThruService = pharmacy.indicatorDriveThruService === 'Y' ? 'Y' : 'N';
+  // Check if the pharmacy name contains "cvs" (case-insensitive)
+  const containsCVS = pharmacyName.toLowerCase().includes('cvs');
 
-  // Use a ternary condition to set pharmacyHours
-  const pharmacyHours = !open24Hours ? pharmacy.pharmacyHours : undefined;
+  // Define additional fields only if the pharmacy name contains "cvs"
+  const cvsSpecificFields = containsCVS ? {
+    open24Hours: pharmacy.open24Hours || false,
+    indicatorPharmacyTwentyFourHoursOpen: pharmacy.open24Hours ? 'Y' : 'N',
+    instorePickupService: pharmacy.instorePickupService === 'Y' ? 'Y' : 'N',
+    indicatorDriveThruService: pharmacy.indicatorDriveThruService === 'Y' ? 'Y' : 'N',
+    pharmacyHours: pharmacy.open24Hours ? { dayHours: [] } : pharmacy.pharmacyHours // If open24Hours is true, send an empty dayHours array
+  } : null;
 
-  return {
+  // Build the pharmacy details object
+  const pharmacyDetails: Pharmacy = {
     pharmacyName,
     address,
     storeId,
-    instorePickupService,
-    indicatorDriveThruService,
-    indicatorPharmacyTwentyFourHoursOpen,
-    pharmacyHours,
-    open24Hours
+    ...(cvsSpecificFields ?? {}) // Spread CVS-specific fields only if they exist
   };
+
+  return pharmacyDetails;
 }
