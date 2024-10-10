@@ -1,68 +1,25 @@
-export interface Pharmacy {
-  pharmacyName?: string;
-  address?: PharmacyAddress;
-  storeId?: string;
-  instorePickupService?: string;
-  indicatorDriveThruService?: string;
-  indicatorPharmacyTwentyFourHoursOpen?: string;
-  pharmacyHours?: PharmacyHours;
-}
-
-export interface PharmacyAddress {
-  city: string;
-  country?: string | null;
-  line: string[];
-  phoneNumber?: string;
-  postalCode: string | null;
-  state: string | null;
-  postalCodeSuffix?: string | null;
-}
-
-export interface PharmacyHours {
-  dayHours: DayHours[];
-}
-
-export interface DayHours {
-  day: string;
-  hours: string;
-}
-
-
 public mapPharmacyDetails(pharmacy: any): Pharmacy {
   if (!pharmacy) {
     this.errorMessage = 'Missing pharmacy details.';
     throw new Error(this.errorMessage);
   }
 
-  let pharmacyName = '';
-  let address: Address | undefined;
-  let storeId = '';
-  let instorePickupService: string | undefined;
-  let indicatorDriveThruService: string | undefined;
-  let indicatorPharmacyTwentyFourHoursOpen: string | undefined;
-  let pharmacyHours: PharmacyHours | undefined;
+  const pharmacyName = pharmacy.pharmacyName || '';
+  const address = pharmacy.address 
+    ? this.mapAddressDetails(pharmacy.address) 
+    : pharmacy.addresses 
+      ? this.mapAddressDetails(pharmacy.addresses) 
+      : undefined;
+  const storeId = pharmacy.storeId || '';
 
-  if (pharmacy.pharmacyName) {
-    pharmacyName = pharmacy.pharmacyName;
-  }
+  // Set indicators based on ternary conditions
+  const open24Hours = pharmacy.open24Hours || false;
+  const indicatorPharmacyTwentyFourHoursOpen = open24Hours ? 'Y' : 'N';
+  const instorePickupService = pharmacy.instorePickupService === 'Y' ? 'Y' : 'N';
+  const indicatorDriveThruService = pharmacy.indicatorDriveThruService === 'Y' ? 'Y' : 'N';
 
-  if (pharmacy.address) {
-    address = this.mapAddressDetails(pharmacy.address);
-  } else if (pharmacy.addresses) {
-    address = this.mapAddressDetails(pharmacy.addresses);
-  }
-
-  if (pharmacy.storeId) {
-    storeId = pharmacy.storeId;
-  }
-
-  // Add additional fields if pharmacyName contains "CVS PHARMACY"
-  if (pharmacyName.toUpperCase().includes('CVS PHARMACY')) {
-    instorePickupService = pharmacy.instorePickupService;
-    indicatorDriveThruService = pharmacy.indicatorDriveThruService;
-    indicatorPharmacyTwentyFourHoursOpen = pharmacy.indicatorPharmacyTwentyFourHoursOpen;
-    pharmacyHours = pharmacy.pharmacyHours;
-  }
+  // Use a ternary condition to set pharmacyHours
+  const pharmacyHours = !open24Hours ? pharmacy.pharmacyHours : undefined;
 
   return {
     pharmacyName,
@@ -71,6 +28,7 @@ public mapPharmacyDetails(pharmacy: any): Pharmacy {
     instorePickupService,
     indicatorDriveThruService,
     indicatorPharmacyTwentyFourHoursOpen,
-    pharmacyHours
+    pharmacyHours,
+    open24Hours
   };
 }
