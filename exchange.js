@@ -21,7 +21,9 @@ public mapPharmacyDetails(pharmacy: any): Pharmacy {
     indicatorPharmacyTwentyFourHoursOpen: pharmacy.open24Hours ? 'Y' : 'N',
     instorePickupService: pharmacy.instorePickupService === 'Y' ? 'Y' : 'N',
     indicatorDriveThruService: pharmacy.indicatorDriveThruService === 'Y' ? 'Y' : 'N',
-    pharmacyHours: pharmacy.open24Hours ? { dayHours: [] } : pharmacy.pharmacyHours // If open24Hours is true, send an empty dayHours array
+    pharmacyHours: {
+      dayHours: pharmacy.open24Hours ? [] : pharmacy.pharmacyHours?.dayHours || [] // If open24Hours is true, return empty dayHours, else use existing dayHours
+    }
   } : null;
 
   // Build the pharmacy details object
