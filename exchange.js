@@ -5,24 +5,22 @@ public mapPharmacyDetails(pharmacy: any): Pharmacy {
   }
 
   const pharmacyName = pharmacy.pharmacyName || '';
-  const storeId = pharmacy.storeId || '';
-  const containsCVS = pharmacyName.toLowerCase().includes('cvs');
+  const address = pharmacy.address 
+    ? this.mapAddressDetails(pharmacy.address)
+    : pharmacy.addresses 
+      ? this.mapAddressDetails(pharmacy.addresses)
+      : undefined;
 
-  // Build the address object conditionally adding phoneNumber if it is present
-  let address: Address | undefined;
-  if (pharmacy.address) {
-    address = {
-      ...this.mapAddressDetails(pharmacy.address),
-      ...(pharmacy.phoneNumber && pharmacy.phoneNumber.trim() !== '' ? { phoneNumber: pharmacy.phoneNumber } : {})
-    };
-  } else if (pharmacy.addresses) {
-    address = {
-      ...this.mapAddressDetails(pharmacy.addresses),
-      ...(pharmacy.phoneNumber && pharmacy.phoneNumber.trim() !== '' ? { phoneNumber: pharmacy.phoneNumber } : {})
-    };
+  // Determine storeId: if pharmacyName contains "CVS" or "HYVEE", use pharmacy.storeId, otherwise default to "99999"
+  const storeId = /cvs|hyvee/i.test(pharmacyName) ? (pharmacy.storeId || '') : '99999';
+
+  // Add phoneNumber to address if available
+  if (pharmacy.phoneNumber && address) {
+    address.phoneNumber = pharmacy.phoneNumber;
   }
 
-  const cvsSpecificFields = containsCVS
+  // Additional fields for "CVS" pharmacies
+  const cvsSpecificFields = pharmacyName.toLowerCase().includes('cvs')
     ? {
         open24Hours: pharmacy.open24Hours || false,
         indicatorPharmacyTwentyFourHoursOpen: pharmacy.open24Hours ? 'Y' : 'N',
@@ -32,15 +30,13 @@ public mapPharmacyDetails(pharmacy: any): Pharmacy {
           dayHours: pharmacy.open24Hours ? [] : pharmacy.pharmacyHours?.dayHours || []
         }
       }
-    : null;
+    : {};
 
-  // Build the pharmacy details object
-  const pharmacyDetails: Pharmacy = {
+  // Construct the final pharmacy object
+  return {
     pharmacyName,
     address,
     storeId,
-    ...(cvsSpecificFields ?? {}) // Spread CVS-specific fields only if they exist
+    ...cvsSpecificFields
   };
-
-  return pharmacyDetails;
 }
