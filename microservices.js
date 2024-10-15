@@ -1,30 +1,14 @@
-public mapPharmacyDetails(pharmacy: Pharmacy | null): Pharmacy {
-  if (!pharmacy) {
-    this.errorMessage = 'Missing pharmacy details.';
-    throw new Error(this.errorMessage); // Optionally throw an error if pharmacy details are missing
+public formatDate(dateString: string | null | undefined): string {
+  if (!dateString) {
+    return this.getCurrentDate();
   }
 
-  let pharmacyName = '';
-  let address: Address | undefined;
-  let storeId = '';
+  // Split the input date to avoid timezone conversion
+  const [year, month, day] = dateString.split('-');
 
-  if (pharmacy.pharmacyName) {
-    pharmacyName = pharmacy.pharmacyName;
+  if (!year || !month || !day) {
+    return this.getCurrentDate();
   }
 
-  if (pharmacy.address) {
-    address = this.mapAddressDetails(pharmacy.address);
-  } else if (pharmacy.addresses) {
-    address = this.mapAddressDetails(pharmacy.addresses[0]); // Assuming addresses is an array and taking the first one
-  }
-
-  if (pharmacy.storeId) {
-    storeId = pharmacy.storeId;
-  }
-
-  return {
-    pharmacyName,
-    address,
-    storeId
-  };
+  return `${month.padStart(2, '0')}/${day.padStart(2, '0')}/${year}`;
 }
