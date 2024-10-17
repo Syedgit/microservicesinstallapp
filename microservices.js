@@ -1,55 +1,114 @@
-getMemberInfoAndToken(
-  request: GetMemberInfoAndTokenRequest,
-  useTransferSecret = true
-): Observable<GetMemberInfoAndTokenResponse> {
-  this.clearTokens(); // Clear cookies or tokens as needed
+  public buildTransferOrderRequest(
+    currentPrescriptions: IPrescriptionDetails[]
+  ): TransferOrderRequest {
+    try {
+      const externalTransfer: ExternalTransfer[] =
+        currentPrescriptions.length > 0
+          ? currentPrescriptions
+              .map((member) => {
+                if (
+                  member.memberType === 'primary' &&
+                  member.emailAddresses.length > 0
+                ) {
+                  this.cardHolderEmailAdd =
+                    member.emailAddresses[0].value || '';
+                }
 
-  // Ensure SSR Auth is fetched first
-  this.ssrAuthFacade.getSsrAuth(useTransferSecret); // Invoke this directly since it doesn't return an observable
+                const rxDetails: RxDetails | null = this.mapRxDetails(member);
 
-  // Now, we will wait for ssrAuth$ observable to emit the SSR auth token
-  return this.ssrAuthFacade.ssrAuth$.pipe(
-    filter((ssrAuth): ssrAuth is OauthResponse => !!ssrAuth && !!ssrAuth.access_token), // Ensure we have a valid token
-    tap((ssrAuth) => {
-      // Store the SSR access token in memory
-      this.ssrAccessToken = ssrAuth.access_token;
-    }),
-    switchMap(() => {
-      // Proceed to fetch config and make the B2B API call after SSR token is retrieved
-      return this.configFacade.config$.pipe(
-        filter((config) => !!config && !isPlatformServer(this.platformId)), // Ensure we have the config and it's not server-side
-        switchMap((config) => {
-          const requestData = {
-            data: {
-              idType: 'PBM_QL_ENC_PARTICIPANT_ID_TYPE',
-              lookupReq: request.data.lookupReq,
-            },
-          };
+                if (rxDetails && rxDetails.drugDetails.length > 0) {
+                  const patient: Patient = this.mapPatientDetails(member);
 
-          const headers = new HttpHeaders({
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${this.ssrAccessToken}`, // Use the stored SSR access token
-            'x-experienceId': b2bConfig.expId,
-            'x-api-key': b2bConfig['x-api-key'],
-          });
+                  return {
+                    requestedChannel: 'WEB',
+                    carrierId: member.carrierID,
+                    clinicalRuleDate: this.getCurrentDate(),
+                    patient,
+                    rxDetails: [rxDetails]
+                  };
+                }
 
-          // Make the B2B API call
-          return this.httpService
-            .post<GetMemberInfoAndTokenResponse>(
-              `${config.environment.basePath}${b2bConfig.b2bUrl}`,
-              b2bConfig.MOCK,
-              { headers },
-              requestData,
-              { maxRequestTime: 10_000 }
-            )
-            .pipe(
-              mapResponseBody(),
-              map((response: GetMemberInfoAndTokenResponse) => {
-                return response;
+                return null;
               })
-            );
+              .filter(
+                (transfer): transfer is ExternalTransfer => transfer !== null
+              )
+          : [];
+
+      if (externalTransfer.length === 0) {
+        throw new Error('No valid Transfer data available');
+      }
+
+      return {
+        data: {
+          idType: 'PBM_QL_PARTICIPANT_ID_TYPE',
+          profile: '',
+          externalTransfer
+        }
+      };
+    } catch (error) {
+      this.store.setStateFailure(true);
+      errorMessage('Error building transfer order request', error);
+      throw error;
+    }
+  }
+
+
+public mapRxDetails(member: any): RxDetails | null {
+    try {
+      const seenRxNumbers = new Set<string>();
+      let fromPharmacy: Pharmacy | null = null;
+
+      const uniqueDrugDetails: DrugDetails[] = member.prescriptionforPatient
+        .filter((drug: any) => drug.isSelected)
+        .map((drug: any) => {
+          if (!seenRxNumbers.has(drug.id)) {
+            seenRxNumbers.add(drug.id);
+            if (!fromPharmacy && drug.pharmacyDetails) {
+              fromPharmacy = drug.pharmacyDetails
+                ? this.mapPharmacyDetails(drug.pharmacyDetails)
+                : null;
+            }
+
+            return {
+              drugName: drug.drugInfo.drug.name || '',
+              encPrescriptionLookupKey: drug.prescriptionLookupKey || '',
+              prescriptionLookupKey: this.mapPrescriptionLookupKey(
+                member,
+                drug
+              ),
+              provider: drug.prescriber
+                ? this.mapProviderDetails(drug.prescriber)
+                : null,
+              recentFillDate: drug.lastRefillDate
+                ? this.formatDate(drug.lastRefillDate)
+                : '',
+              daySupply: drug.daysSupply || 0,
+              quantity: drug.quantity || 0
+            };
+          }
+
+          return null;
         })
+        .filter(
+          (drugDetail: any): drugDetail is DrugDetails => drugDetail !== null
+        );
+      const toPharmacy: Pharmacy = this.mapPharmacyDetails(
+        this.selectedPharmacy
       );
-    })
-  );
-}
+
+      if (uniqueDrugDetails.length === 0 || !fromPharmacy || !toPharmacy) {
+        return null;
+      }
+
+      return {
+        drugDetails: uniqueDrugDetails,
+        fromPharmacy,
+        toPharmacy
+      };
+    } catch (error: unknown) {
+      this.store.setStateFailure(true);
+      errorMessage('Error in processing RxDetails', error);
+      throw error;
+    }
+  }
