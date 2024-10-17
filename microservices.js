@@ -1,4 +1,21 @@
-import { ReplaySubject, Observable } from 'rxjs';
+import { HttpHeaders } from '@angular/common/http';
+import { Injectable, inject, PLATFORM_ID } from '@angular/core';
+import { isPlatformServer } from '@angular/common';
+import { ConfigFacade } from '@digital-blocks/angular/core/store/config';
+import {
+  HttpService,
+  mapResponseBody
+} from '@digital-blocks/angular/core/util/services';
+import { SsrAuthFacade } from '@digital-blocks/angular/pharmacy/shared/store/ssr-auth';
+import { filter, first, Observable, switchMap, tap } from 'rxjs';
+
+import {
+  GetMemberInfoAndTokenRequest,
+  GetMemberInfoAndTokenResponse,
+  OauthResponse
+} from '../+state/member-authentication.interfaces';
+
+import { b2bConfig } from './member-authentication.config';
 
 @Injectable({
   providedIn: 'root'
@@ -9,34 +26,39 @@ export class MemberAuthenticationService {
   private readonly httpService = inject(HttpService);
   private readonly platformId = inject(PLATFORM_ID);
 
-  private ssrAccessToken: ReplaySubject<string> = new ReplaySubject<string>(1); // Store the access token
+  // Variable to track the in-memory SSR token
+  private ssrAccessToken: string | null = null;
 
+  // Method to get the SSR token and then call B2B API
   getMemberInfoAndToken(
     request: GetMemberInfoAndTokenRequest,
     useTransferSecret = true
   ): Observable<GetMemberInfoAndTokenResponse> {
-    // Trigger SSR Auth without pipe, as it's just dispatching an action
+    // Step 1: Clear any previous SSR token from memory
+    this.ssrAccessToken = null;
+
+    // Step 2: Trigger the SSR Auth process to get a fresh token
     this.ssrAuthFacade.getSsrAuth(useTransferSecret);
 
-    // Subscribe to ssrAuth$ and emit the token into the ReplaySubject
-    this.ssrAuthFacade.ssrAuth$.pipe(
+    // Step 3: Wait for the SSR Auth to complete and get the fresh token
+    return this.ssrAuthFacade.ssrAuth$.pipe(
       filter(
         (ssrAuth): ssrAuth is OauthResponse =>
           !!ssrAuth && !!ssrAuth.access_token
       ),
-      first()
-    ).subscribe((ssrAuth) => {
-      // Store the SSR access token in the ReplaySubject
-      this.ssrAccessToken.next(ssrAuth.access_token);
-    });
+      first(), // Take only the first valid token
+      tap((ssrAuth) => {
+        // Store the access token in memory to prevent re-fetching
+        this.ssrAccessToken = ssrAuth.access_token;
+      }),
+      switchMap(() => {
+        // Step 4: Now that we have the SSR token in memory, proceed with the B2B call
 
-    // Now make the B2B call after the SSR token is ready
-    return this.ssrAccessToken.pipe(
-      switchMap((token) => {
         return this.configFacade.config$.pipe(
-          filter((config) => !isPlatformServer(this.platformId) && !!config),
+          filter((config) => !!config && !isPlatformServer(this.platformId)),
           first(),
           switchMap((config) => {
+            // Prepare the request data
             const requestData = {
               data: {
                 idType: 'PBM_QL_ENC_PARTICIPANT_ID_TYPE',
@@ -44,13 +66,15 @@ export class MemberAuthenticationService {
               }
             };
 
+            // Prepare the headers with the in-memory SSR token
             const headers = new HttpHeaders({
               'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`, // Use the SSR token
+              Authorization: `Bearer ${this.ssrAccessToken}`, // Use the in-memory token here
               'x-experienceId': b2bConfig.expId,
               'x-api-key': b2bConfig['x-api-key']
             });
 
+            // Step 5: Make the B2B API call using the token
             return this.httpService
               .post<GetMemberInfoAndTokenResponse>(
                 `${config.environment.basePath}${b2bConfig.b2bUrl}`,
