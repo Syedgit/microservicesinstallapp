@@ -13,10 +13,9 @@ public buildTransferOrderRequest(
                 this.cardHolderEmailAdd = member.emailAddresses[0].value || '';
               }
 
-              // Use the new logic for handling each prescription separately
               const rxDetailsArray: RxDetails[] = member.prescriptionforPatient
-                .filter((drug: any) => drug.isSelected)
-                .map((drug) => this.mapRxDetails(member, drug))
+                .filter((drug: any) => drug.isSelected) // Filter only selected prescriptions
+                .map((drug) => this.mapRxDetails(member, drug)) // Map each selected prescription to RxDetails
                 .filter((rxDetail): rxDetail is RxDetails => rxDetail !== null);
 
               if (rxDetailsArray.length > 0) {
@@ -27,7 +26,7 @@ public buildTransferOrderRequest(
                   carrierId: member.carrierID,
                   clinicalRuleDate: this.getCurrentDate(),
                   patient,
-                  rxDetails: rxDetailsArray // Now we pass the array of RxDetails
+                  rxDetails: rxDetailsArray // Pass the array of RxDetails
                 };
               }
 
@@ -61,42 +60,34 @@ public mapRxDetails(member: any, drug: any): RxDetails | null {
   try {
     let fromPharmacy: Pharmacy | null = null;
 
-    // Each drug will now have its own RxDetails object
-    if (drug.isSelected) {
-      if (!fromPharmacy && drug.pharmacyDetails) {
-        fromPharmacy = this.mapPharmacyDetails(drug.pharmacyDetails);
-      }
+    // Map the prescription to a DrugDetails object
+    const drugDetails: DrugDetails[] = [{
+      drugName: drug.drugInfo?.drug?.name || '',
+      encPrescriptionLookupKey: drug.prescriptionLookupKey || '',
+      prescriptionLookupKey: this.mapPrescriptionLookupKey(member, drug),
+      provider: drug.prescriber ? this.mapProviderDetails(drug.prescriber) : null,
+      recentFillDate: drug.lastRefillDate ? this.formatDate(drug.lastRefillDate) : '',
+      daySupply: drug.daysSupply || 0,
+      quantity: drug.quantity || 0
+    }];
 
-      const uniqueDrugDetails: DrugDetails[] = [{
-        drugName: drug.drugInfo.drug.name || '',
-        encPrescriptionLookupKey: drug.prescriptionLookupKey || '',
-        prescriptionLookupKey: this.mapPrescriptionLookupKey(member, drug),
-        provider: drug.prescriber
-          ? this.mapProviderDetails(drug.prescriber)
-          : null,
-        recentFillDate: drug.lastRefillDate
-          ? this.formatDate(drug.lastRefillDate)
-          : '',
-        daySupply: drug.daysSupply || 0,
-        quantity: drug.quantity || 0
-      }];
-
-      const toPharmacy: Pharmacy = this.mapPharmacyDetails(
-        this.selectedPharmacy
-      );
-
-      if (uniqueDrugDetails.length === 0 || !fromPharmacy || !toPharmacy) {
-        return null;
-      }
-
-      return {
-        drugDetails: uniqueDrugDetails,
-        fromPharmacy,
-        toPharmacy
-      };
+    // Set fromPharmacy using the pharmacyDetails from the drug
+    if (!fromPharmacy && drug.pharmacyDetails) {
+      fromPharmacy = this.mapPharmacyDetails(drug.pharmacyDetails);
     }
 
-    return null;
+    // toPharmacy is set using the selectedPharmacy
+    const toPharmacy: Pharmacy = this.mapPharmacyDetails(this.selectedPharmacy);
+
+    if (drugDetails.length === 0 || !fromPharmacy || !toPharmacy) {
+      return null;
+    }
+
+    return {
+      drugDetails,
+      fromPharmacy,
+      toPharmacy
+    };
   } catch (error: unknown) {
     this.store.setStateFailure(true);
     errorMessage('Error in processing RxDetails', error);
