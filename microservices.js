@@ -28,20 +28,17 @@ export class MemberAuthenticationService {
     request: GetMemberInfoAndTokenRequest,
     useTransferSecret = true
   ): Observable<GetMemberInfoAndTokenResponse> {
-
     // Step 1: Trigger the SSR Auth process to get a fresh token
-    return this.ssrAuthFacade.getSsrAuth(useTransferSecret).pipe(
-      // Step 2: Wait for the SSR Auth to complete and get the fresh token
-      switchMap(() =>
-        this.ssrAuthFacade.ssrAuth$.pipe(
-          filter((ssrAuth): ssrAuth is OauthResponse => !!ssrAuth && !!ssrAuth.access_token),
-          first(), // Ensure only the first valid token is taken
-          switchMap((ssrAuth) => {
-            // Step 3: After getting SSR token, proceed to the B2B call
-            return this.callB2BApi(request, ssrAuth.access_token);
-          })
-        )
-      )
+    this.ssrAuthFacade.getSsrAuth(useTransferSecret);
+
+    // Step 2: Proceed with getting the token after `getSsrAuth` has been triggered
+    return this.ssrAuthFacade.ssrAuth$.pipe(
+      filter((ssrAuth): ssrAuth is OauthResponse => !!ssrAuth && !!ssrAuth.access_token),
+      first(), // Ensure only the first valid token is taken
+      switchMap((ssrAuth) => {
+        // Step 3: After getting SSR token, proceed to the B2B call
+        return this.callB2BApi(request, ssrAuth.access_token);
+      })
     );
   }
 
