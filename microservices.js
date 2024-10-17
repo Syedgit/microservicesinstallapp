@@ -1,93 +1,85 @@
-import { HttpHeaders } from '@angular/common/http';
-import { Injectable, inject, PLATFORM_ID } from '@angular/core';
-import { isPlatformServer } from '@angular/common';
-import { ConfigFacade } from '@digital-blocks/angular/core/store/config';
-import { HttpService, mapResponseBody } from '@digital-blocks/angular/core/util/services';
-import { SsrAuthFacade } from '@digital-blocks/angular/pharmacy/shared/store/ssr-auth';
-import { filter, first, switchMap, Observable, throwError, catchError } from 'rxjs';
-
-import {
-  GetMemberInfoAndTokenRequest,
-  GetMemberInfoAndTokenResponse,
-  OauthResponse
-} from '../+state/member-authentication.interfaces';
-
-import { b2bConfig } from './member-authentication.config';
+import { Renderer2, RendererFactory2, Injectable, inject, PLATFORM_ID } from '@angular/core';
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class MemberAuthenticationService {
+  private ssrAccessToken: string = ''; // In-memory token storage
+  private renderer: Renderer2;
+
   private readonly ssrAuthFacade = inject(SsrAuthFacade);
   private readonly configFacade = inject(ConfigFacade);
   private readonly httpService = inject(HttpService);
   private readonly platformId = inject(PLATFORM_ID);
+  private readonly rendererFactory = inject(RendererFactory2);
 
-  // Method to get the SSR token and then call B2B API
+  constructor() {
+    this.renderer = this.rendererFactory.createRenderer(null, null);
+  }
+
   getMemberInfoAndToken(
     request: GetMemberInfoAndTokenRequest,
     useTransferSecret = true
   ): Observable<GetMemberInfoAndTokenResponse> {
-    // Step 1: Trigger the SSR Auth process to get a fresh token
-    this.ssrAuthFacade.getSsrAuth(useTransferSecret);
+    // Clear both tokens in memory and cookies
+    this.clearTokens();
 
-    // Step 2: Proceed with getting the token after `getSsrAuth` has been triggered
-    return this.ssrAuthFacade.ssrAuth$.pipe(
+    return this.ssrAuthFacade.getSsrAuth(useTransferSecret).pipe(
       filter((ssrAuth): ssrAuth is OauthResponse => !!ssrAuth && !!ssrAuth.access_token),
-      first(), // Ensure only the first valid token is taken
-      switchMap((ssrAuth) => {
-        // Step 3: After getting SSR token, proceed to the B2B call
-        return this.callB2BApi(request, ssrAuth.access_token);
+      tap((ssrAuth) => {
+        // Store fresh SSR token
+        this.ssrAccessToken = ssrAuth.access_token;
+      }),
+      switchMap(() => {
+        return this.configFacade.config$.pipe(
+          filter((config) => !!config && !isPlatformServer(this.platformId)),
+          switchMap((config) => {
+            const requestData = {
+              data: {
+                idType: 'PBM_QL_ENC_PARTICIPANT_ID_TYPE',
+                lookupReq: request.data.lookupReq,
+              },
+            };
+
+            const headers = new HttpHeaders({
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${this.ssrAccessToken}`,
+              'x-experienceId': b2bConfig.expId,
+              'x-api-key': b2bConfig['x-api-key'],
+            });
+
+            return this.httpService
+              .post<GetMemberInfoAndTokenResponse>(
+                `${config.environment.basePath}${b2bConfig.b2bUrl}`,
+                b2bConfig.MOCK,
+                {
+                  headers,
+                },
+                requestData,
+                { maxRequestTime: 10_000 }
+              )
+              .pipe(
+                mapResponseBody(),
+                map((response: GetMemberInfoAndTokenResponse) => {
+                  return response;
+                })
+              );
+          })
+        );
       })
     );
   }
 
-  // Helper method to handle the B2B API call
-  private callB2BApi(
-    request: GetMemberInfoAndTokenRequest,
-    ssrAccessToken: string
-  ): Observable<GetMemberInfoAndTokenResponse> {
-    return this.configFacade.config$.pipe(
-      filter((config) => !!config && !isPlatformServer(this.platformId)),
-      first(),
-      switchMap((config) => {
-        // Prepare the request data
-        const requestData = {
-          data: {
-            idType: 'PBM_QL_ENC_PARTICIPANT_ID_TYPE',
-            lookupReq: request.data.lookupReq
-          }
-        };
+  private clearTokens(): void {
+    this.ssrAccessToken = ''; // Clear in-memory token
+    // Clear cookies with different paths
+    this.deleteCookie('access_token', '/');        // Root path cookie
+    this.deleteCookie('access_token', '/another'); // Specific path cookie (e.g., '/another')
+  }
 
-        // Prepare the headers with the SSR token
-        const headers = new HttpHeaders({
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${ssrAccessToken}`, // Use the passed token
-          'x-experienceId': b2bConfig.expId,
-          'x-api-key': b2bConfig['x-api-key']
-        });
-
-        // Step 4: Make the B2B API call using the token
-        return this.httpService
-          .post<GetMemberInfoAndTokenResponse>(
-            `${config.environment.basePath}${b2bConfig.b2bUrl}`,
-            b2bConfig.MOCK,
-            {
-              headers
-            },
-            requestData,
-            {
-              maxRequestTime: 10_000
-            }
-          )
-          .pipe(
-            mapResponseBody(),
-            catchError((error) => {
-              // Handle B2B call failure
-              return throwError(() => error);
-            })
-          );
-      })
-    );
+  private deleteCookie(name: string, path: string): void {
+    const date = new Date(0).toUTCString();
+    const cookieString = `${name}=; expires=${date}; path=${path};`;
+    this.renderer.setProperty(document, 'cookie', cookieString);
   }
 }
