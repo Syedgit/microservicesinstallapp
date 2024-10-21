@@ -4,7 +4,7 @@ import { HttpHeaders, HttpErrorResponse } from '@angular/common/http';
 import { ConfigFacade } from '@digital-blocks/angular/core/store/config';
 import { HttpService, mapResponseBody } from '@digital-blocks/angular/core/util/services';
 import { SsrAuthFacade } from '@digital-blocks/angular/pharmacy/shared/store/ssr-auth';
-import { catchError, filter, map, Observable, of, switchMap, throwError, take, tap, retry } from 'rxjs';
+import { catchError, filter, map, Observable, of, switchMap, throwError, take, tap } from 'rxjs';
 import { GetMemberInfoAndTokenRequest, GetMemberInfoAndTokenResponse } from '../+state/member-authentication.interfaces';
 import { b2bConfig } from './member-authentication.config';
 
@@ -21,23 +21,33 @@ export class MemberAuthenticationService {
 
   getMemberInfoAndToken(request: GetMemberInfoAndTokenRequest, useTransferSecret = true): Observable<GetMemberInfoAndTokenResponse> {
     console.log('getMemberInfoAndToken called with:', request);
-    return this.getOrRefreshToken(useTransferSecret).pipe(
-      switchMap(token => this.makeB2BCallWithRetry(request, token, useTransferSecret)),
-      catchError(this.handleError)
+    return this.getNewSsrAuthToken(useTransferSecret).pipe(
+      switchMap(token => {
+        if (!token) {
+          console.error('Failed to obtain a valid SSR Auth token');
+          return throwError(() => new Error('Failed to obtain a valid SSR Auth token'));
+        }
+        return this.makeB2BCall(request, token);
+      }),
+      catchError(error => {
+        if (this.isInvalidTokenError(error)) {
+          console.log('B2B call failed due to invalid token, refreshing token and retrying');
+          return this.getNewSsrAuthToken(useTransferSecret).pipe(
+            switchMap(newToken => {
+              if (!newToken) {
+                return throwError(() => new Error('Failed to refresh SSR Auth token'));
+              }
+              return this.makeB2BCall(request, newToken);
+            })
+          );
+        }
+        return throwError(() => error);
+      })
     );
   }
 
-  private getOrRefreshToken(useTransferSecret: boolean): Observable<string> {
-    if (this.tokenInfo?.token) {
-      console.log('Using existing token');
-      return of(this.tokenInfo.token);
-    }
-    console.log('No token, fetching new one');
-    return this.refreshToken(useTransferSecret);
-  }
-
-  private refreshToken(useTransferSecret: boolean): Observable<string> {
-    console.log('Refreshing token, useTransferSecret:', useTransferSecret);
+  private getNewSsrAuthToken(useTransferSecret: boolean): Observable<string | null> {
+    console.log('Getting new SSR Auth token, useTransferSecret:', useTransferSecret);
     this.ssrAuthFacade.getSsrAuth(useTransferSecret);
     return this.ssrAuthFacade.ssrAuth$.pipe(
       take(1),
@@ -48,41 +58,14 @@ export class MemberAuthenticationService {
           this.tokenInfo = { token: ssrAuth.access_token };
           return this.tokenInfo.token;
         } else {
-          throw new Error('Failed to obtain valid token from SSR Auth');
+          console.error('Failed to obtain valid token from SSR Auth');
+          return null;
         }
       }),
       catchError(error => {
-        console.error('Error in refreshToken:', error);
-        throw error;
+        console.error('Error in getNewSsrAuthToken:', error);
+        return of(null);
       })
-    );
-  }
-
-  private makeB2BCallWithRetry(request: GetMemberInfoAndTokenRequest, token: string, useTransferSecret: boolean): Observable<GetMemberInfoAndTokenResponse> {
-    return this.makeB2BCall(request, token).pipe(
-      retry({
-        count: 1,
-        delay: (error, retryCount) => {
-          if (this.isInvalidTokenError(error)) {
-            console.log('B2B call failed due to invalid token, refreshing token and retrying');
-            return this.refreshToken(useTransferSecret);
-          }
-          return throwError(() => error);
-        }
-      }),
-      catchError(error => {
-        if (this.isInvalidTokenError(error)) {
-          console.error('B2B call failed after token refresh attempt');
-        }
-        return throwError(() => error);
-      })
-    );
-  }
-
-  private isInvalidTokenError(error: any): boolean {
-    return (
-      (error instanceof HttpErrorResponse && error.status === 401) ||
-      (error.statusCode === "1009" && error.statusDescription === "Access token is no longer valid")
     );
   }
 
@@ -115,8 +98,10 @@ export class MemberAuthenticationService {
     );
   }
 
-  private handleError(error: any): Observable<never> {
-    console.error('Error in getMemberInfoAndToken:', error);
-    return throwError(() => new Error('Failed to get member info and token'));
+  private isInvalidTokenError(error: any): boolean {
+    return (
+      (error instanceof HttpErrorResponse && error.status === 401) ||
+      (error.statusCode === "1009" && error.statusDescription === "Access token is no longer valid")
+    );
   }
 }
