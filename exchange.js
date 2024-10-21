@@ -17,29 +17,23 @@ export class MemberAuthenticationService {
   private readonly httpService = inject(HttpService);
   private readonly platformId = inject(PLATFORM_ID);
 
-  private tokenInfo: { token: string; expiresAt: number } | null = null;
+  private tokenInfo: { token: string } | null = null;
 
   getMemberInfoAndToken(request: GetMemberInfoAndTokenRequest, useTransferSecret = true): Observable<GetMemberInfoAndTokenResponse> {
     console.log('getMemberInfoAndToken called with:', request);
-    return this.getValidToken(useTransferSecret).pipe(
+    return this.getOrRefreshToken(useTransferSecret).pipe(
       switchMap(token => this.makeB2BCallWithRetry(request, token, useTransferSecret)),
       catchError(this.handleError)
     );
   }
 
-  private getValidToken(useTransferSecret: boolean): Observable<string> {
-    if (this.isTokenValid()) {
-      console.log('Using cached token');
-      return of(this.tokenInfo!.token);
+  private getOrRefreshToken(useTransferSecret: boolean): Observable<string> {
+    if (this.tokenInfo?.token) {
+      console.log('Using existing token');
+      return of(this.tokenInfo.token);
     }
-    console.log('No valid token, refreshing');
+    console.log('No token, fetching new one');
     return this.refreshToken(useTransferSecret);
-  }
-
-  private isTokenValid(): boolean {
-    const isValid = !!this.tokenInfo && Date.now() < this.tokenInfo.expiresAt - 5 * 60 * 1000;
-    console.log('Token validity check:', isValid);
-    return isValid;
   }
 
   private refreshToken(useTransferSecret: boolean): Observable<string> {
@@ -49,12 +43,9 @@ export class MemberAuthenticationService {
       take(1),
       tap(ssrAuth => console.log('SSR Auth response received:', ssrAuth ? 'Valid response' : 'Null response')),
       map(ssrAuth => {
-        if (ssrAuth?.access_token && ssrAuth.expires_in) {
+        if (ssrAuth?.access_token) {
           console.log('Valid token received from SSR Auth');
-          this.tokenInfo = {
-            token: ssrAuth.access_token,
-            expiresAt: Date.now() + Number(ssrAuth.expires_in) * 1000
-          };
+          this.tokenInfo = { token: ssrAuth.access_token };
           return this.tokenInfo.token;
         } else {
           throw new Error('Failed to obtain valid token from SSR Auth');
@@ -72,21 +63,24 @@ export class MemberAuthenticationService {
       retryWhen(errors =>
         errors.pipe(
           concatMap((error, index) => {
-            if (index >= 2) {
+            if (index >= 1) {
               return throwError(() => error);
             }
-            if (error instanceof HttpErrorResponse && error.status === 401) {
-              console.log('B2B call failed with 401, refreshing token and retrying');
-              return this.refreshToken(useTransferSecret);
-            }
-            if (error.statusCode === "1009" && error.statusDescription === "Access token is no longer valid") {
-              console.log('B2B call failed with status 1009, refreshing token and retrying');
+            if (this.isInvalidTokenError(error)) {
+              console.log('B2B call failed due to invalid token, refreshing token and retrying');
               return this.refreshToken(useTransferSecret);
             }
             return throwError(() => error);
           })
         )
       )
+    );
+  }
+
+  private isInvalidTokenError(error: any): boolean {
+    return (
+      (error instanceof HttpErrorResponse && error.status === 401) ||
+      (error.statusCode === "1009" && error.statusDescription === "Access token is no longer valid")
     );
   }
 
