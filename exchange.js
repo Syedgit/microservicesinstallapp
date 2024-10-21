@@ -4,7 +4,7 @@ import { HttpHeaders, HttpErrorResponse } from '@angular/common/http';
 import { ConfigFacade } from '@digital-blocks/angular/core/store/config';
 import { HttpService, mapResponseBody } from '@digital-blocks/angular/core/util/services';
 import { SsrAuthFacade } from '@digital-blocks/angular/pharmacy/shared/store/ssr-auth';
-import { catchError, filter, map, Observable, of, switchMap, throwError, take, tap } from 'rxjs';
+import { catchError, filter, map, Observable, of, switchMap, throwError, take, tap, mergeMap } from 'rxjs';
 import { GetMemberInfoAndTokenRequest, GetMemberInfoAndTokenResponse } from '../+state/member-authentication.interfaces';
 import { b2bConfig } from './member-authentication.config';
 
@@ -21,34 +21,25 @@ export class MemberAuthenticationService {
 
   getMemberInfoAndToken(request: GetMemberInfoAndTokenRequest, useTransferSecret = true): Observable<GetMemberInfoAndTokenResponse> {
     console.log('getMemberInfoAndToken called with:', request);
-    return this.ensureValidToken(useTransferSecret).pipe(
-      switchMap(token => {
-        if (!token) {
-          console.error('Failed to obtain a valid token');
-          return throwError(() => new Error('Failed to obtain a valid token'));
-        }
-        return this.makeB2BCall(request, token);
-      }),
+    return this.getTokenAndMakeB2BCall(request, useTransferSecret).pipe(
       catchError(error => {
-        if (error instanceof HttpErrorResponse && error.status === 401) {
-          console.log('B2B call failed with 401, refreshing token and retrying');
-          return this.refreshToken(useTransferSecret).pipe(
-            switchMap(newToken => {
-              if (!newToken) {
-                return throwError(() => new Error('Failed to refresh token'));
-              }
-              return this.makeB2BCall(request, newToken);
-            })
-          );
-        }
-        return throwError(() => error);
+        console.error('Error in initial attempt:', error);
+        // If the first attempt fails, try refreshing the token and make the B2B call again
+        return this.refreshToken(useTransferSecret).pipe(
+          mergeMap(newToken => this.makeB2BCall(request, newToken || ''))
+        );
       }),
       catchError(this.handleError)
     );
   }
 
-  private ensureValidToken(useTransferSecret: boolean): Observable<string | null> {
-    console.log('Ensuring valid token');
+  private getTokenAndMakeB2BCall(request: GetMemberInfoAndTokenRequest, useTransferSecret: boolean): Observable<GetMemberInfoAndTokenResponse> {
+    return this.getOrRefreshToken(useTransferSecret).pipe(
+      mergeMap(token => this.makeB2BCall(request, token || ''))
+    );
+  }
+
+  private getOrRefreshToken(useTransferSecret: boolean): Observable<string | null> {
     if (this.isTokenValid()) {
       console.log('Using cached token');
       return of(this.tokenInfo!.token);
@@ -65,16 +56,10 @@ export class MemberAuthenticationService {
 
   private refreshToken(useTransferSecret: boolean): Observable<string | null> {
     console.log('Refreshing token, useTransferSecret:', useTransferSecret);
-    
-    // Trigger the SSR auth process
     this.ssrAuthFacade.getSsrAuth(useTransferSecret);
-    
-    // Wait for the SSR auth response
     return this.ssrAuthFacade.ssrAuth$.pipe(
       take(1),
-      tap(ssrAuth => {
-        console.log('SSR Auth response received:', ssrAuth ? 'Valid response' : 'Null response');
-      }),
+      tap(ssrAuth => console.log('SSR Auth response received:', ssrAuth ? 'Valid response' : 'Null response')),
       map(ssrAuth => {
         if (ssrAuth?.access_token && ssrAuth.expires_in) {
           console.log('Valid token received from SSR Auth');
@@ -91,13 +76,6 @@ export class MemberAuthenticationService {
       catchError(error => {
         console.error('Error in refreshToken:', error);
         return of(null);
-      }),
-      tap(token => {
-        if (token) {
-          console.log('Token successfully refreshed');
-        } else {
-          console.error('Token refresh failed');
-        }
       })
     );
   }
@@ -108,7 +86,7 @@ export class MemberAuthenticationService {
       filter(config => !!config && !isPlatformServer(this.platformId)),
       take(1),
       tap(config => console.log('Config received for B2B call')),
-      switchMap(config => {
+      mergeMap(config => {
         const headers = new HttpHeaders({
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
@@ -125,7 +103,14 @@ export class MemberAuthenticationService {
           { maxRequestTime: 10_000 }
         ).pipe(
           tap(() => console.log('B2B call made')),
-          mapResponseBody()
+          mapResponseBody(),
+          catchError(error => {
+            if (error instanceof HttpErrorResponse && error.status === 401) {
+              console.log('B2B call failed with 401, will retry with new token');
+              return throwError(() => new Error('401 Unauthorized'));
+            }
+            return throwError(() => error);
+          })
         );
       })
     );
