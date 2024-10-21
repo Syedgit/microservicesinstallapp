@@ -23,20 +23,17 @@ export class MemberAuthenticationService {
     request: GetMemberInfoAndTokenRequest,
     useTransferSecret = true
   ): Observable<GetMemberInfoAndTokenResponse> {
-    // Step 1: Call getSsrAuth() to trigger the SSR Auth process
-    this.ssrAuthFacade.getSsrAuth(useTransferSecret);
+    // Step 1: Get a valid SSR token
+    return this.getValidSsrToken(useTransferSecret).pipe(
+      switchMap((ssrAuthToken) => {
+        if (!ssrAuthToken) {
+          return throwError(() => new Error('Missing access token.'));
+        }
 
-    // Step 2: Listen to the ssrAuth$ observable to retrieve the SSR token
-    return this.ssrAuthFacade.ssrAuth$.pipe(
-      filter((ssrAuth): ssrAuth is OauthResponse => !!ssrAuth && !!ssrAuth.access_token),
-      switchMap((ssrAuth) => {
-        // Step 3: Check for valid SSR token
-        this.ssrAccessToken = ssrAuth.access_token;
-
+        // Step 2: Use the token to make the B2B call
         return this.configFacade.config$.pipe(
           filter((config) => !!config && !isPlatformServer(this.platformId)),
-          // Step 4: Make the B2B call with the fresh SSR token
-          switchMap((config) => this.makeB2BCall(config, request))
+          switchMap((config) => this.makeB2BCall(config, request, ssrAuthToken))
         );
       }),
       catchError((error) => {
@@ -48,15 +45,15 @@ export class MemberAuthenticationService {
 
   private getValidSsrToken(useTransferSecret: boolean): Observable<string | null> {
     const tokenAgeInSeconds = 15 * 60; // 15 minutes (expires_in = 899)
-    
+
     // Check if the SSR token exists and hasn't expired
     if (this.ssrAccessToken && this.tokenExpirationTime && Date.now() < this.tokenExpirationTime) {
-      return this.ssrAccessToken
+      return of(this.ssrAccessToken);
     }
 
-    // Retrieve new SSR token from SSR Auth Facade by subscribing to ssrAuth$
-    this.ssrAuthFacade.getSsrAuth(useTransferSecret);
-    
+    // Retrieve new SSR token
+    this.ssrAuthFacade.getSsrAuth(useTransferSecret); // Ensure triggering SSR Auth
+
     return this.ssrAuthFacade.ssrAuth$.pipe(
       map((ssrAuth) => {
         if (ssrAuth && ssrAuth.access_token && ssrAuth.expires_in) {
@@ -72,7 +69,11 @@ export class MemberAuthenticationService {
     );
   }
 
-  private makeB2BCall(config: any, request: GetMemberInfoAndTokenRequest): Observable<GetMemberInfoAndTokenResponse> {
+  private makeB2BCall(
+    config: any,
+    request: GetMemberInfoAndTokenRequest,
+    ssrAuthToken: string
+  ): Observable<GetMemberInfoAndTokenResponse> {
     const requestData = {
       data: {
         idType: 'PBM_QL_ENC_PARTICIPANT_ID_TYPE',
@@ -81,7 +82,7 @@ export class MemberAuthenticationService {
     };
     const headers = new HttpHeaders({
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${this.ssrAccessToken}`, // Use the fresh SSR token
+      Authorization: `Bearer ${ssrAuthToken}`, // Use the fresh SSR token
       'x-experienceId': b2bConfig.expId,
       'x-api-key': config.b2bApiKey
     });
