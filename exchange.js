@@ -4,8 +4,8 @@ import { Injectable, inject, PLATFORM_ID } from '@angular/core';
 import { ConfigFacade } from '@digital-blocks/angular/core/store/config';
 import { HttpService, mapResponseBody } from '@digital-blocks/angular/core/util/services';
 import { SsrAuthFacade } from '@digital-blocks/angular/pharmacy/shared/store/ssr-auth';
-import { catchError, filter, map, Observable, switchMap, throwError } from 'rxjs';
-import { GetMemberInfoAndTokenRequest, GetMemberInfoAndTokenResponse, OauthResponse } from '../+state/member-authentication.interfaces';
+import { catchError, filter, map, Observable, of, switchMap, throwError } from 'rxjs';
+import { GetMemberInfoAndTokenRequest, GetMemberInfoAndTokenResponse } from '../+state/member-authentication.interfaces';
 import { b2bConfig } from './member-authentication.config';
 
 @Injectable({
@@ -28,15 +28,13 @@ export class MemberAuthenticationService {
     request: GetMemberInfoAndTokenRequest,
     useTransferSecret = true
   ): Observable<GetMemberInfoAndTokenResponse> {
-    // Step 1: Call getSsrAuth() to trigger the SSR Auth process
-    this.ssrAuthFacade.getSsrAuth(useTransferSecret);
-
-    // Step 2: Listen to the ssrAuth$ observable to retrieve the SSR token
-    return this.ssrAuthFacade.ssrAuth$.pipe(
-      filter((ssrAuth): ssrAuth is OauthResponse => !!ssrAuth && !!ssrAuth.access_token),
-      switchMap((ssrAuth) => {
-        // Step 3: Check for valid SSR token
-        this.ssrAccessToken = ssrAuth.access_token;
+    // Call the getValidSsrToken method to handle SSR auth and token expiration
+    return this.getValidSsrToken(useTransferSecret).pipe(
+      switchMap((ssrToken) => {
+        if (!ssrToken) {
+          return throwError(() => new Error('SSO Authentication failed: Missing access token.'));
+        }
+        this.ssrAccessToken = ssrToken;
 
         return this.configFacade.config$.pipe(
           filter((config) => !!config && !isPlatformServer(this.platformId)),
@@ -55,12 +53,12 @@ export class MemberAuthenticationService {
    * Retrieves and validates the SSR token, considering expiration.
    * @param useTransferSecret Flag to determine whether to use transfer secret.
    */
-  private getValidSsrToken(useTransferSecret: boolean): Observable<OauthResponse | null> {
+  private getValidSsrToken(useTransferSecret: boolean): Observable<string | null> {
     const tokenAgeInSeconds = 15 * 60; // 15 minutes (expires_in = 899)
     
     // Check if the SSR token exists and hasn't expired
     if (this.ssrAccessToken && this.tokenExpirationTime && Date.now() < this.tokenExpirationTime) {
-      return of({ access_token: this.ssrAccessToken });
+      return of(this.ssrAccessToken);  // Return token string
     }
 
     // Retrieve new SSR token from SSR Auth Facade by subscribing to ssrAuth$
@@ -72,7 +70,7 @@ export class MemberAuthenticationService {
           this.ssrAccessToken = ssrAuth.access_token;
           this.tokenExpirationTime = Date.now() + ssrAuth.expires_in * 1000;
         }
-        return ssrAuth;
+        return this.ssrAccessToken;  // Return token string
       })
     );
   }
