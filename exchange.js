@@ -4,7 +4,7 @@ import { HttpHeaders, HttpErrorResponse } from '@angular/common/http';
 import { ConfigFacade } from '@digital-blocks/angular/core/store/config';
 import { HttpService, mapResponseBody } from '@digital-blocks/angular/core/util/services';
 import { SsrAuthFacade } from '@digital-blocks/angular/pharmacy/shared/store/ssr-auth';
-import { catchError, filter, map, Observable, of, retry, switchMap, throwError, take, tap } from 'rxjs';
+import { catchError, filter, map, Observable, of, switchMap, throwError, take, tap, mergeMap } from 'rxjs';
 import { GetMemberInfoAndTokenRequest, GetMemberInfoAndTokenResponse } from '../+state/member-authentication.interfaces';
 import { b2bConfig } from './member-authentication.config';
 
@@ -22,7 +22,8 @@ export class MemberAuthenticationService {
   getMemberInfoAndToken(request: GetMemberInfoAndTokenRequest, useTransferSecret = true): Observable<GetMemberInfoAndTokenResponse> {
     console.log('getMemberInfoAndToken called with:', request);
     return this.getValidSsrToken(useTransferSecret).pipe(
-      switchMap(token => {
+      tap(token => console.log('Token received:', token ? 'Valid token' : 'No token')),
+      mergeMap(token => {
         if (!token) {
           console.error('No valid token obtained');
           return throwError(() => new Error('Failed to obtain SSR token'));
@@ -32,7 +33,7 @@ export class MemberAuthenticationService {
             if (error.status === 401) {
               console.log('B2B call failed with 401, refreshing token and retrying');
               return this.refreshToken(useTransferSecret).pipe(
-                switchMap(newToken => {
+                mergeMap(newToken => {
                   if (!newToken) {
                     return throwError(() => new Error('Failed to refresh token'));
                   }
@@ -95,7 +96,7 @@ export class MemberAuthenticationService {
       filter(config => !!config && !isPlatformServer(this.platformId)),
       take(1),
       tap(config => console.log('Config received for B2B call')),
-      switchMap(config => {
+      mergeMap(config => {
         const headers = new HttpHeaders({
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
@@ -112,7 +113,11 @@ export class MemberAuthenticationService {
           { maxRequestTime: 10_000 }
         ).pipe(
           tap(() => console.log('B2B call made')),
-          mapResponseBody()
+          mapResponseBody(),
+          catchError(error => {
+            console.error('Error in B2B call:', error);
+            return throwError(() => error);
+          })
         );
       })
     );
