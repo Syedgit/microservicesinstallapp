@@ -4,7 +4,7 @@ import { Injectable, inject, PLATFORM_ID } from '@angular/core';
 import { ConfigFacade } from '@digital-blocks/angular/core/store/config';
 import { HttpService, mapResponseBody } from '@digital-blocks/angular/core/util/services';
 import { SsrAuthFacade } from '@digital-blocks/angular/pharmacy/shared/store/ssr-auth';
-import { catchError, filter, map, Observable, switchMap, throwError } from 'rxjs';
+import { catchError, filter, map, Observable, of, switchMap, throwError } from 'rxjs';
 import { GetMemberInfoAndTokenRequest, GetMemberInfoAndTokenResponse, OauthResponse } from '../+state/member-authentication.interfaces';
 import { b2bConfig } from './member-authentication.config';
 
@@ -46,12 +46,12 @@ export class MemberAuthenticationService {
     );
   }
 
-  private getValidSsrToken(useTransferSecret: boolean): Observable<OauthResponse | null> {
+  private getValidSsrToken(useTransferSecret: boolean): Observable<string | null> {
     const tokenAgeInSeconds = 15 * 60; // 15 minutes (expires_in = 899)
     
     // Check if the SSR token exists and hasn't expired
     if (this.ssrAccessToken && this.tokenExpirationTime && Date.now() < this.tokenExpirationTime) {
-      return of({ access_token: this.ssrAccessToken });
+      return this.ssrAccessToken
     }
 
     // Retrieve new SSR token from SSR Auth Facade by subscribing to ssrAuth$
@@ -67,7 +67,7 @@ export class MemberAuthenticationService {
             this.tokenExpirationTime = Date.now() + expiresInNumber * 1000; // Set expiration in milliseconds
           }
         }
-        return ssrAuth;
+        return this.ssrAccessToken;
       })
     );
   }
