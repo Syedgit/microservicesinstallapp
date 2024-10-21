@@ -4,7 +4,7 @@ import { HttpHeaders, HttpErrorResponse } from '@angular/common/http';
 import { ConfigFacade } from '@digital-blocks/angular/core/store/config';
 import { HttpService, mapResponseBody } from '@digital-blocks/angular/core/util/services';
 import { SsrAuthFacade } from '@digital-blocks/angular/pharmacy/shared/store/ssr-auth';
-import { catchError, filter, map, Observable, of, switchMap, throwError, take, tap } from 'rxjs';
+import { catchError, filter, map, Observable, of, switchMap, throwError, take, tap, retryWhen, concatMap } from 'rxjs';
 import { GetMemberInfoAndTokenRequest, GetMemberInfoAndTokenResponse } from '../+state/member-authentication.interfaces';
 import { b2bConfig } from './member-authentication.config';
 
@@ -22,16 +22,7 @@ export class MemberAuthenticationService {
   getMemberInfoAndToken(request: GetMemberInfoAndTokenRequest, useTransferSecret = true): Observable<GetMemberInfoAndTokenResponse> {
     console.log('getMemberInfoAndToken called with:', request);
     return this.getValidToken(useTransferSecret).pipe(
-      switchMap(token => this.makeB2BCall(request, token)),
-      catchError(error => {
-        if (error instanceof HttpErrorResponse && error.status === 401) {
-          console.log('B2B call failed with 401, refreshing token and retrying');
-          return this.refreshToken(useTransferSecret).pipe(
-            switchMap(newToken => this.makeB2BCall(request, newToken))
-          );
-        }
-        return throwError(() => error);
-      }),
+      switchMap(token => this.makeB2BCallWithRetry(request, token, useTransferSecret)),
       catchError(this.handleError)
     );
   }
@@ -76,6 +67,29 @@ export class MemberAuthenticationService {
     );
   }
 
+  private makeB2BCallWithRetry(request: GetMemberInfoAndTokenRequest, token: string, useTransferSecret: boolean): Observable<GetMemberInfoAndTokenResponse> {
+    return this.makeB2BCall(request, token).pipe(
+      retryWhen(errors =>
+        errors.pipe(
+          concatMap((error, index) => {
+            if (index >= 2) {
+              return throwError(() => error);
+            }
+            if (error instanceof HttpErrorResponse && error.status === 401) {
+              console.log('B2B call failed with 401, refreshing token and retrying');
+              return this.refreshToken(useTransferSecret);
+            }
+            if (error.statusCode === "1009" && error.statusDescription === "Access token is no longer valid") {
+              console.log('B2B call failed with status 1009, refreshing token and retrying');
+              return this.refreshToken(useTransferSecret);
+            }
+            return throwError(() => error);
+          })
+        )
+      )
+    );
+  }
+
   private makeB2BCall(request: GetMemberInfoAndTokenRequest, token: string): Observable<GetMemberInfoAndTokenResponse> {
     console.log('Making B2B call');
     return this.configFacade.config$.pipe(
@@ -99,7 +113,11 @@ export class MemberAuthenticationService {
           { maxRequestTime: 10_000 }
         ).pipe(
           tap(() => console.log('B2B call made')),
-          mapResponseBody()
+          mapResponseBody(),
+          catchError(error => {
+            console.error('Error in B2B call:', error);
+            return throwError(() => error);
+          })
         );
       })
     );
