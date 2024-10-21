@@ -1,6 +1,6 @@
 import { Injectable, inject, PLATFORM_ID } from '@angular/core';
 import { isPlatformServer } from '@angular/common';
-import { HttpHeaders } from '@angular/common/http';
+import { HttpHeaders, HttpErrorResponse } from '@angular/common/http';
 import { ConfigFacade } from '@digital-blocks/angular/core/store/config';
 import { HttpService, mapResponseBody } from '@digital-blocks/angular/core/util/services';
 import { SsrAuthFacade } from '@digital-blocks/angular/pharmacy/shared/store/ssr-auth';
@@ -22,17 +22,27 @@ export class MemberAuthenticationService {
   getMemberInfoAndToken(request: GetMemberInfoAndTokenRequest, useTransferSecret = true): Observable<GetMemberInfoAndTokenResponse> {
     console.log('getMemberInfoAndToken called with:', request);
     return this.getValidSsrToken(useTransferSecret).pipe(
-      tap(token => console.log('Token received:', token ? 'Valid token' : 'No token')),
       switchMap(token => {
         if (!token) {
           console.error('No valid token obtained');
           return throwError(() => new Error('Failed to obtain SSR token'));
         }
-        return this.makeB2BCall(request, token);
-      }),
-      retry({
-        count: 1,
-        delay: (error: unknown) => this.handleRetry(error, useTransferSecret)
+        return this.makeB2BCall(request, token).pipe(
+          catchError((error: HttpErrorResponse) => {
+            if (error.status === 401) {
+              console.log('B2B call failed with 401, refreshing token and retrying');
+              return this.refreshToken(useTransferSecret).pipe(
+                switchMap(newToken => {
+                  if (!newToken) {
+                    return throwError(() => new Error('Failed to refresh token'));
+                  }
+                  return this.makeB2BCall(request, newToken);
+                })
+              );
+            }
+            return throwError(() => error);
+          })
+        );
       }),
       catchError(this.handleError)
     );
@@ -102,26 +112,10 @@ export class MemberAuthenticationService {
           { maxRequestTime: 10_000 }
         ).pipe(
           tap(() => console.log('B2B call made')),
-          mapResponseBody(),
-          catchError(error => {
-            console.error('Error in B2B call:', error);
-            return throwError(() => error);
-          })
+          mapResponseBody()
         );
       })
     );
-  }
-
-  private handleRetry(error: any, useTransferSecret: boolean): Observable<null> {
-    console.log('Handling retry, error:', error);
-    if (error.status === 401) {
-      console.log('401 error, refreshing token');
-      this.tokenInfo = null;
-      return this.refreshToken(useTransferSecret).pipe(
-        switchMap(() => of(null))
-      );
-    }
-    return throwError(() => error);
   }
 
   private handleError(error: any): Observable<never> {
