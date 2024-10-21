@@ -4,7 +4,7 @@ import { Injectable, inject, PLATFORM_ID } from '@angular/core';
 import { ConfigFacade } from '@digital-blocks/angular/core/store/config';
 import { HttpService, mapResponseBody } from '@digital-blocks/angular/core/util/services';
 import { SsrAuthFacade } from '@digital-blocks/angular/pharmacy/shared/store/ssr-auth';
-import { catchError, filter, map, Observable, of, retry, switchMap, throwError } from 'rxjs';
+import { catchError, filter, map, Observable, of, retry, switchMap, throwError, take, timeout } from 'rxjs';
 import { GetMemberInfoAndTokenRequest, GetMemberInfoAndTokenResponse, OauthResponse } from '../+state/member-authentication.interfaces';
 import { b2bConfig } from './member-authentication.config';
 
@@ -21,16 +21,21 @@ export class MemberAuthenticationService {
 
   getMemberInfoAndToken(request: GetMemberInfoAndTokenRequest, useTransferSecret = true): Observable<GetMemberInfoAndTokenResponse> {
     return this.getValidSsrToken(useTransferSecret).pipe(
-      switchMap(token => this.makeB2BCall(request, token)),
+      switchMap(token => {
+        if (!token) {
+          return throwError(() => new Error('Failed to obtain SSR token'));
+        }
+        return this.makeB2BCall(request, token);
+      }),
       retry({
         count: 1,
-        delay: (error:unknown) => this.handleRetry(error)
+        delay: (error: unknown) => this.handleRetry(error, useTransferSecret)
       }),
       catchError(this.handleError)
     );
   }
 
-  private getValidSsrToken(useTransferSecret: boolean): Observable<string> {
+  private getValidSsrToken(useTransferSecret: boolean): Observable<string | null> {
     if (this.isTokenValid()) {
       return of(this.tokenInfo!.token);
     }
@@ -42,9 +47,11 @@ export class MemberAuthenticationService {
     return !!this.tokenInfo && Date.now() < this.tokenInfo.expiresAt - 5 * 60 * 1000;
   }
 
-  private refreshToken(useTransferSecret:boolean): Observable<string> {
-    this.ssrAuthFacade.getSsrAuth(useTransferSecret); 
+  private refreshToken(useTransferSecret: boolean): Observable<string | null> {
+    this.ssrAuthFacade.getSsrAuth(useTransferSecret);
     return this.ssrAuthFacade.ssrAuth$.pipe(
+      take(1),
+      timeout(10000), // 10 seconds timeout
       map(ssrAuth => {
         if (ssrAuth?.access_token && ssrAuth.expires_in) {
           this.tokenInfo = {
@@ -53,7 +60,11 @@ export class MemberAuthenticationService {
           };
           return this.tokenInfo.token;
         }
-        throw new Error('Failed to obtain SSR token');
+        return null;
+      }),
+      catchError(error => {
+        console.error('Error refreshing token:', error);
+        return of(null);
       })
     );
   }
@@ -61,6 +72,7 @@ export class MemberAuthenticationService {
   private makeB2BCall(request: GetMemberInfoAndTokenRequest, token: string): Observable<GetMemberInfoAndTokenResponse> {
     return this.configFacade.config$.pipe(
       filter(config => !!config && !isPlatformServer(this.platformId)),
+      take(1),
       switchMap(config => {
         const headers = new HttpHeaders({
           'Content-Type': 'application/json',
@@ -80,10 +92,13 @@ export class MemberAuthenticationService {
     );
   }
 
-  private handleRetry(error: any): Observable<null> {
+  private handleRetry(error: any, useTransferSecret: boolean): Observable<null> {
     if (error.status === 401) {
+      console.log('Token expired or invalid, refreshing...');
       this.tokenInfo = null; // Force token refresh
-      return of(null); // Retry after clearing token
+      return this.refreshToken(useTransferSecret).pipe(
+        switchMap(() => of(null))
+      );
     }
     return throwError(() => error);
   }
