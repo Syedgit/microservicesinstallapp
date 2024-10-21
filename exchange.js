@@ -2,19 +2,10 @@ import { isPlatformServer } from '@angular/common';
 import { HttpHeaders } from '@angular/common/http';
 import { Injectable, inject, PLATFORM_ID } from '@angular/core';
 import { ConfigFacade } from '@digital-blocks/angular/core/store/config';
-import {
-  HttpService,
-  mapResponseBody
-} from '@digital-blocks/angular/core/util/services';
+import { HttpService, mapResponseBody } from '@digital-blocks/angular/core/util/services';
 import { SsrAuthFacade } from '@digital-blocks/angular/pharmacy/shared/store/ssr-auth';
-import { filter, map, Observable, switchMap } from 'rxjs';
-
-import {
-  GetMemberInfoAndTokenRequest,
-  GetMemberInfoAndTokenResponse,
-  OauthResponse
-} from '../+state/member-authentication.interfaces';
-
+import { catchError, filter, map, Observable, switchMap, throwError } from 'rxjs';
+import { GetMemberInfoAndTokenRequest, GetMemberInfoAndTokenResponse, OauthResponse } from '../+state/member-authentication.interfaces';
 import { b2bConfig } from './member-authentication.config';
 
 @Injectable({
@@ -25,57 +16,97 @@ export class MemberAuthenticationService {
   private readonly configFacade = inject(ConfigFacade);
   private readonly httpService = inject(HttpService);
   private readonly platformId = inject(PLATFORM_ID);
+  private ssrAccessToken: string | null = null;
+  private tokenExpirationTime: number | null = null;
 
+  /**
+   * Retrieves member info and token.
+   * @param request Member request object.
+   * @param useTransferSecret Flag to determine whether to use transfer secret.
+   */
   getMemberInfoAndToken(
     request: GetMemberInfoAndTokenRequest,
     useTransferSecret = true
   ): Observable<GetMemberInfoAndTokenResponse> {
+    // Step 1: Call getSsrAuth() to trigger the SSR Auth process
     this.ssrAuthFacade.getSsrAuth(useTransferSecret);
 
+    // Step 2: Listen to the ssrAuth$ observable to retrieve the SSR token
     return this.ssrAuthFacade.ssrAuth$.pipe(
-      filter(
-        (ssrAuth): ssrAuth is OauthResponse =>
-          !!ssrAuth && !!ssrAuth.access_token
-      ),
+      filter((ssrAuth): ssrAuth is OauthResponse => !!ssrAuth && !!ssrAuth.access_token),
       switchMap((ssrAuth) => {
+        // Step 3: Check for valid SSR token
+        this.ssrAccessToken = ssrAuth.access_token;
+
         return this.configFacade.config$.pipe(
-          filter((config) => !isPlatformServer(this.platformId) && !!config),
-          switchMap((config) => {
-            const requestData = {
-              data: {
-                idType: 'PBM_QL_ENC_PARTICIPANT_ID_TYPE',
-                lookupReq: request.data.lookupReq
-              }
-            };
-
-            const headers = new HttpHeaders({
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${ssrAuth.access_token}`,
-              'x-experienceId': b2bConfig.expId,
-              'x-api-key': config.b2bApiKey
-            });
-
-            return this.httpService
-              .post<GetMemberInfoAndTokenResponse>(
-                `${config.environment.basePath}${b2bConfig.b2bUrl}`,
-                b2bConfig.MOCK,
-                {
-                  headers
-                },
-                requestData,
-                {
-                  maxRequestTime: 10_000
-                }
-              )
-              .pipe(
-                mapResponseBody(),
-                map((response: GetMemberInfoAndTokenResponse) => {
-                  return response;
-                })
-              );
-          })
+          filter((config) => !!config && !isPlatformServer(this.platformId)),
+          // Step 4: Make the B2B call with the fresh SSR token
+          switchMap((config) => this.makeB2BCall(config, request))
         );
+      }),
+      catchError((error) => {
+        console.error('Error in getMemberInfoAndToken:', error);
+        return throwError(() => new Error('Failed to get member info and token'));
       })
     );
+  }
+
+  /**
+   * Retrieves and validates the SSR token, considering expiration.
+   * @param useTransferSecret Flag to determine whether to use transfer secret.
+   */
+  private getValidSsrToken(useTransferSecret: boolean): Observable<OauthResponse | null> {
+    const tokenAgeInSeconds = 15 * 60; // 15 minutes (expires_in = 899)
+    
+    // Check if the SSR token exists and hasn't expired
+    if (this.ssrAccessToken && this.tokenExpirationTime && Date.now() < this.tokenExpirationTime) {
+      return of({ access_token: this.ssrAccessToken });
+    }
+
+    // Retrieve new SSR token from SSR Auth Facade by subscribing to ssrAuth$
+    this.ssrAuthFacade.getSsrAuth(useTransferSecret);
+    
+    return this.ssrAuthFacade.ssrAuth$.pipe(
+      map((ssrAuth) => {
+        if (ssrAuth && ssrAuth.access_token && ssrAuth.expires_in) {
+          this.ssrAccessToken = ssrAuth.access_token;
+          this.tokenExpirationTime = Date.now() + ssrAuth.expires_in * 1000;
+        }
+        return ssrAuth;
+      })
+    );
+  }
+
+  /**
+   * Makes the B2B call using the current SSR access token.
+   * @param config Configuration object.
+   * @param request Member request object.
+   */
+  private makeB2BCall(config: any, request: GetMemberInfoAndTokenRequest): Observable<GetMemberInfoAndTokenResponse> {
+    const requestData = {
+      data: {
+        idType: 'PBM_QL_ENC_PARTICIPANT_ID_TYPE',
+        lookupReq: request.data.lookupReq
+      }
+    };
+    const headers = new HttpHeaders({
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${this.ssrAccessToken}`, // Use the fresh SSR token
+      'x-experienceId': b2bConfig.expId,
+      'x-api-key': config.b2bApiKey
+    });
+
+    return this.httpService
+      .post<GetMemberInfoAndTokenResponse>(
+        `${config.environment.basePath}${b2bConfig.b2bUrl}`,
+        b2bConfig.MOCK,
+        { headers },
+        requestData,
+        { maxRequestTime: 10_000 }
+      )
+      .pipe(
+        mapResponseBody(),
+        map((response: GetMemberInfoAndTokenResponse) => response)
+      );
   }
 }
