@@ -1,9 +1,12 @@
-import { Injectable, inject, PLATFORM_ID } from '@angular/core';
-import { HttpHeaders } from '@angular/common/http';
 import { isPlatformServer } from '@angular/common';
-import { ConfigFacade, HttpService, SsrAuthFacade } from '@your-imports';
-import { Observable, of, throwError } from 'rxjs';
-import { catchError, filter, map, switchMap, retry } from 'rxjs/operators';
+import { HttpHeaders } from '@angular/common/http';
+import { Injectable, inject, PLATFORM_ID } from '@angular/core';
+import { ConfigFacade } from '@digital-blocks/angular/core/store/config';
+import { HttpService, mapResponseBody } from '@digital-blocks/angular/core/util/services';
+import { SsrAuthFacade } from '@digital-blocks/angular/pharmacy/shared/store/ssr-auth';
+import { catchError, filter, map, Observable, of, retry, switchMap, throwError } from 'rxjs';
+import { GetMemberInfoAndTokenRequest, GetMemberInfoAndTokenResponse, OauthResponse } from '../+state/member-authentication.interfaces';
+import { b2bConfig } from './member-authentication.config';
 
 @Injectable({
   providedIn: 'root'
@@ -16,31 +19,32 @@ export class MemberAuthenticationService {
 
   private tokenInfo: { token: string; expiresAt: number } | null = null;
 
-  getMemberInfoAndToken(request: GetMemberInfoAndTokenRequest): Observable<GetMemberInfoAndTokenResponse> {
-    return this.getValidSsrToken().pipe(
+  getMemberInfoAndToken(request: GetMemberInfoAndTokenRequest, useTransferSecret = true): Observable<GetMemberInfoAndTokenResponse> {
+    return this.getValidSsrToken(useTransferSecret).pipe(
       switchMap(token => this.makeB2BCall(request, token)),
       retry({
         count: 1,
-        delay: (error) => this.handleRetry(error)
+        delay: (error:unknown) => this.handleRetry(error)
       }),
       catchError(this.handleError)
     );
   }
 
-  private getValidSsrToken(): Observable<string> {
+  private getValidSsrToken(useTransferSecret: boolean): Observable<string> {
     if (this.isTokenValid()) {
       return of(this.tokenInfo!.token);
     }
 
-    return this.refreshToken();
+    return this.refreshToken(useTransferSecret);
   }
 
   private isTokenValid(): boolean {
-    return !!this.tokenInfo && Date.now() < this.tokenInfo.expiresAt - 5 * 60 * 1000; // 5 minutes buffer
+    return !!this.tokenInfo && Date.now() < this.tokenInfo.expiresAt - 5 * 60 * 1000;
   }
 
-  private refreshToken(): Observable<string> {
-    return this.ssrAuthFacade.getSsrAuth(true).pipe(
+  private refreshToken(useTransferSecret:boolean): Observable<string> {
+    this.ssrAuthFacade.getSsrAuth(useTransferSecret); 
+    return this.ssrAuthFacade.ssrAuth$.pipe(
       map(ssrAuth => {
         if (ssrAuth?.access_token && ssrAuth.expires_in) {
           this.tokenInfo = {
@@ -76,7 +80,7 @@ export class MemberAuthenticationService {
     );
   }
 
-  private handleRetry(error: any): Observable<never> {
+  private handleRetry(error: any): Observable<null> {
     if (error.status === 401) {
       this.tokenInfo = null; // Force token refresh
       return of(null); // Retry after clearing token
