@@ -1,125 +1,387 @@
-import { isPlatformServer } from '@angular/common';
-import { HttpHeaders } from '@angular/common/http';
-import { Injectable, inject, PLATFORM_ID } from '@angular/core';
-import { ConfigFacade } from '@digital-blocks/angular/core/store/config';
-import { HttpService, mapResponseBody } from '@digital-blocks/angular/core/util/services';
-import { SsrAuthFacade } from '@digital-blocks/angular/pharmacy/shared/store/ssr-auth';
-import { catchError, filter, map, Observable, of, switchMap, throwError, retryWhen, delay, take } from 'rxjs';
-import { GetMemberInfoAndTokenRequest, GetMemberInfoAndTokenResponse, OauthResponse } from '../+state/member-authentication.interfaces';
-import { b2bConfig } from './member-authentication.config';
+/* eslint-disable @typescript-eslint/no-explicit-any -- fix later*/
+import {
+  Component,
+  CUSTOM_ELEMENTS_SCHEMA,
+  inject,
+  Input,
+  OnInit
+} from '@angular/core';
+import { errorMessage } from '@digital-blocks/angular/core/util/error-handler';
+import { NavigationService } from '@digital-blocks/angular/core/util/services';
+import { TransferPrescriptionsSubHeaderComponent } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/components';
+import { IPrescriptionDetails } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/current-prescriptions';
+import {
+  TransferOrderRequest,
+  ExternalTransfer,
+  Patient,
+  RxDetails,
+  Address,
+  DrugDetails,
+  PrescriptionLookupKey,
+  Provider,
+  Pharmacy
+} from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/prescriptions-list';
 
-@Injectable({
-  providedIn: 'root'
+import { SubmitTransferStore } from './submit-transfer.store';
+
+@Component({
+  selector: 'lib-submit-transfer',
+  standalone: true,
+  imports: [TransferPrescriptionsSubHeaderComponent],
+  templateUrl: 'submit-transfer.component.html',
+  styleUrls: ['submit-transfer.component.scss'],
+  schemas: [CUSTOM_ELEMENTS_SCHEMA],
+  providers: [SubmitTransferStore],
+  host: { ngSkipHydration: 'true' }
 })
-export class MemberAuthenticationService {
-  private readonly ssrAuthFacade = inject(SsrAuthFacade);
-  private readonly configFacade = inject(ConfigFacade);
-  private readonly httpService = inject(HttpService);
-  private readonly platformId = inject(PLATFORM_ID);
+export class SubmitTransferComponent implements OnInit {
+  @Input() public staticContent = {
+    continueBtnText: 'Continue'
+  };
+  protected readonly navigationService = inject(NavigationService);
+  public currentPrescriptions: IPrescriptionDetails[] = [];
+  public errorMessage: string | null = null;
+  public cardHolderEmailAdd = '';
+  public cardHolderPhoneNum = '';
+  selectedPharmacy: Pharmacy | undefined;
+  protected readonly store = inject(SubmitTransferStore);
 
-  /**
-   * Retrieves member info and token.
-   * @param request Member request object.
-   * @param useTransferSecret Flag to determine whether to use transfer secret.
-   */
-  getMemberInfoAndToken(
-    request: GetMemberInfoAndTokenRequest,
-    useTransferSecret = true
-  ): Observable<GetMemberInfoAndTokenResponse> {
-    this.ssrAuthFacade.getSsrAuth(useTransferSecret);
-
-    return this.ssrAuthFacade.ssrAuth$.pipe(
-      filter(
-        (ssrAuth): ssrAuth is OauthResponse =>
-          !!ssrAuth && !!ssrAuth.access_token
-      ),
-      switchMap((ssrAuth) => {
-        return this.configFacade.config$.pipe(
-          filter((config) => !isPlatformServer(this.platformId) && !!config),
-          switchMap((config) => this.makeB2BCall(request, ssrAuth.access_token, config))
-        );
-      }),
-      catchError((error) => {
-        console.error('Error in getMemberInfoAndToken:', error);
-        return throwError(() => new Error('Failed to get member info and token'));
-      })
-    );
+  constructor() {
+    //
   }
 
-  /**
-   * Makes the B2B call using the current SSR access token.
-   * Retries if the token is invalid (based on B2B response or 401).
-   * @param request Member request object.
-   * @param token SSR access token.
-   * @param config Configuration object.
-   */
-  private makeB2BCall(
-    request: GetMemberInfoAndTokenRequest,
-    token: string,
-    config: any
-  ): Observable<GetMemberInfoAndTokenResponse> {
-    const requestData = {
-      data: {
-        idType: 'PBM_QL_ENC_PARTICIPANT_ID_TYPE',
-        lookupReq: request.data.lookupReq
-      }
-    };
-    const headers = new HttpHeaders({
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      'x-experienceId': b2bConfig.expId,
-      'x-api-key': config.b2bApiKey
+  ngOnInit(): void {
+    this.store.selectPharmacy$.subscribe((data) => {
+      this.selectedPharmacy = data;
     });
-
-    return this.httpService
-      .post<GetMemberInfoAndTokenResponse>(
-        `${config.environment.basePath}${b2bConfig.b2bUrl}`,
-        b2bConfig.MOCK,
-        { headers },
-        requestData,
-        { maxRequestTime: 10_000 }
-      )
-      .pipe(
-        mapResponseBody(),
-        switchMap((response: GetMemberInfoAndTokenResponse) => {
-          // Check if token is invalid
-          if (response?.statusCode === '1009' || (response?.statusDesc && response.statusDesc.includes('no longer valid'))) {
-            console.error('Invalid token, retrying...');
-            // Retry by fetching new SSR Auth token
-            return this.retrySsrAuthAndB2B(request);
-          }
-          return of(response); // Return the response if valid
-        }),
-        catchError((error) => {
-          // Check for HTTP 401 Unauthorized and retry
-          if (error.status === 401) {
-            console.error('Unauthorized 401, retrying with new SSR token...');
-            return this.retrySsrAuthAndB2B(request);
-          }
-          return throwError(error); // Rethrow the error if not related to token expiration
-        })
-      );
+    this.store.setStateFailure(false);
+    this.listenCurrentPrescriptiondata();
   }
 
-  /**
-   * Helper method to retry the SSR Auth and B2B call.
-   * @param request Member request object.
-   */
-  private retrySsrAuthAndB2B(request: GetMemberInfoAndTokenRequest): Observable<GetMemberInfoAndTokenResponse> {
-    // Retry by fetching a new SSR token
-    this.ssrAuthFacade.getSsrAuth(true);
-    
-    return this.ssrAuthFacade.ssrAuth$.pipe(
-      filter(
-        (ssrAuth): ssrAuth is OauthResponse =>
-          !!ssrAuth && !!ssrAuth.access_token
-      ),
-      take(1), // Take only the first valid token response
-      switchMap((ssrAuth) => this.configFacade.config$.pipe(
-        filter((config) => !!config),
-        take(1),
-        switchMap((config) => this.makeB2BCall(request, ssrAuth.access_token, config)) // Retry the B2B call with the new token
-      ))
-    );
+  public listenCurrentPrescriptiondata(): void {
+    this.store.currentPrescriptions$.subscribe((data) => {
+      this.currentPrescriptions = data || [];
+    });
+  }
+
+  public submitTransfer(): void {
+    try {
+      if (this.currentPrescriptions.length > 0 && this.selectedPharmacy) {
+        const transferOrderRequest = this.buildTransferOrderRequest(
+          this.currentPrescriptions
+        );
+
+        this.store.submitTransfer(transferOrderRequest);
+        this.store.submitTransferResponse$.subscribe((response) => {
+          if (response) {
+            if (response.statusCode === '0000') {
+              this.handleSuccess();
+            } else {
+              this.handleError(response);
+            }
+          }
+        });
+      } else {
+        this.store.setStateFailure(true);
+        throw new Error('No prescriptions selected for transfer');
+      }
+    } catch (error) {
+      this.store.setStateFailure(true);
+      errorMessage('submitTransferFailure', error);
+      throw error;
+    }
+  }
+
+  public buildTransferOrderRequest(
+    currentPrescriptions: IPrescriptionDetails[]
+  ): TransferOrderRequest {
+    try {
+      const externalTransfer: ExternalTransfer[] =
+        currentPrescriptions.length > 0
+          ? currentPrescriptions
+              .map((member) => {
+                if (
+                  member.memberType === 'primary' &&
+                  member.emailAddresses.length > 0
+                ) {
+                  this.cardHolderEmailAdd =
+                    member.emailAddresses[0].value || '';
+                }
+
+                const rxDetailsArray: RxDetails[] =
+                  member.prescriptionforPatient
+                    .filter((drug: any) => drug.isSelected)
+                    .map((drug) => this.mapRxDetails(member, drug))
+                    .filter(
+                      (rxDetail): rxDetail is RxDetails => rxDetail !== null
+                    );
+
+                if (rxDetailsArray.length > 0) {
+                  const patient: Patient = this.mapPatientDetails(member);
+
+                  return {
+                    requestedChannel: 'WEB',
+                    carrierId: member.carrierID,
+                    clinicalRuleDate: this.getCurrentDate(),
+                    patient,
+                    rxDetails: rxDetailsArray
+                  };
+                }
+
+                return null;
+              })
+              .filter(
+                (transfer): transfer is ExternalTransfer => transfer !== null
+              )
+          : [];
+
+      if (externalTransfer.length === 0) {
+        throw new Error('No valid Transfer data available');
+      }
+
+      return {
+        data: {
+          idType: 'PBM_QL_PARTICIPANT_ID_TYPE',
+          profile: '',
+          externalTransfer
+        }
+      };
+    } catch (error) {
+      this.store.setStateFailure(true);
+      errorMessage('Error building transfer order request', error);
+      throw error;
+    }
+  }
+
+  public handleError(error: any): void {
+    this.errorMessage =
+      error.statusDescription ||
+      error.message ||
+      'An unexpected error occurred';
+  }
+
+  public handleSuccess(): void {
+    if (sessionStorage.getItem('xid')) {
+      this.navigationService.navigate(
+        '/pharmacy/benefits/transfer/guest/order-confirmation',
+        { queryParamsHandling: 'preserve' },
+        {
+          navigateByPath: true
+        }
+      );
+    } else {
+      this.navigationService.navigate(
+        '/pharmacy/benefits/transfer/order-confirmation',
+        { queryParamsHandling: 'preserve' },
+        {
+          navigateByPath: true
+        }
+      );
+    }
+  }
+
+  public mapRxDetails(member: any, drug: any): RxDetails | null {
+    try {
+      let fromPharmacy: Pharmacy | null = null;
+
+      const drugDetails: DrugDetails[] = [
+        {
+          drugName: drug.drugInfo?.drug?.name || '',
+          encPrescriptionLookupKey: drug.prescriptionLookupKey || '',
+          prescriptionLookupKey: this.mapPrescriptionLookupKey(member, drug),
+          provider: this.mapProviderDetails(drug.prescriber),
+          recentFillDate: drug.lastRefillDate
+            ? this.formatDate(drug.lastRefillDate)
+            : '',
+          daySupply: drug.daysSupply || 0,
+          quantity: drug.quantity || 0
+        }
+      ];
+
+      if (!fromPharmacy && drug.pharmacyDetails) {
+        fromPharmacy = this.mapPharmacyDetails(drug.pharmacyDetails);
+      }
+      const toPharmacy: Pharmacy = this.mapPharmacyDetails(
+        this.selectedPharmacy
+      );
+
+      if (drugDetails.length === 0 || !fromPharmacy || !toPharmacy) {
+        return null;
+      }
+
+      return {
+        drugDetails,
+        fromPharmacy,
+        toPharmacy
+      };
+    } catch (error: unknown) {
+      this.store.setStateFailure(true);
+      errorMessage('Error in processing RxDetails', error);
+      throw error;
+    }
+  }
+
+  public mapPatientDetails(member: any): Patient {
+    if (!member) throw new Error('Member Details Missing');
+
+    if (
+      member.phoneNumbers &&
+      member.memberType === 'primary' &&
+      member.phoneNumbers.length > 0
+    ) {
+      this.cardHolderPhoneNum = member.phoneNumbers[0].value || '';
+    }
+
+    let gender: string;
+
+    switch (member.gender) {
+      case '1': {
+        gender = 'M';
+        break;
+      }
+      case '2': {
+        gender = 'F';
+        break;
+      }
+      default: {
+        gender = '';
+        break;
+      }
+    }
+
+    const memberDetail: Patient = {
+      firstName: member.firstName,
+      lastName: member.lastName,
+      gender,
+      dateOfBirth: member.dateOfBirth,
+      memberId: member.id?.toString() || '',
+      patientId: member.id?.toString() || '',
+      patientIdType: 'PBM_QL_PARTICIPANT_ID_TYPE',
+      profileId: '',
+      email: this.cardHolderEmailAdd,
+      address: this.mapAddressDetails(member.addresses || {}, true)
+    };
+
+    return memberDetail;
+  }
+
+  public mapPrescriptionLookupKey(
+    member: any,
+    drug: any
+  ): PrescriptionLookupKey {
+    if (!member || !drug) throw new Error('Member and Drug Details Missing');
+
+    return {
+      id: member.id ? Number(member.id) : 0,
+      idType: 'PBM_QL_PARTICIPANT_ID_TYPE',
+      rxNumber: drug.id || ''
+    };
+  }
+
+  public mapProviderDetails(prescriber: any): Provider {
+    if (!prescriber) throw new Error('Missing Prescriber Details');
+
+    const mappedProvider: any = {
+      npi: prescriber.id || '',
+      firstName: prescriber.firstName || '',
+      lastName: prescriber.lastName || '',
+      address: this.mapAddressDetails(prescriber.address || {}, false)
+    };
+
+    if (prescriber.fax && prescriber.fax.trim() !== '') {
+      mappedProvider.faxNumber = prescriber.fax.replaceAll('-', '');
+    }
+
+    if (prescriber.phone && prescriber.phone.trim() !== '') {
+      mappedProvider.phoneNumber = prescriber.phone.replaceAll('-', '');
+    }
+
+    return mappedProvider;
+  }
+
+  public mapPharmacyDetails(pharmacy: any): Pharmacy {
+    if (!pharmacy) {
+      throw new Error('Missing pharmacy details.');
+    }
+
+    const pharmacyName = pharmacy.pharmacyName ?? '';
+    let address: Address | undefined;
+    const storeId = /cvs|hyvee/i.test(pharmacyName)
+      ? pharmacy.storeId || ''
+      : '99999';
+
+    if (pharmacy.addresses) {
+      address = this.mapAddressDetails(pharmacy.addresses, true);
+    } else if (pharmacy.address) {
+      address = this.mapAddressDetails(pharmacy.address, true);
+    }
+    const cvsSpecificFields = this.cvsSpecificFields(pharmacy);
+
+    return {
+      pharmacyName,
+      address,
+      storeId,
+      ...cvsSpecificFields
+    };
+  }
+
+  private cvsSpecificFields(pharmacy: any) {
+    const pharmacyName = pharmacy.pharmacyName ?? '';
+    const containsCVS = pharmacyName.toLowerCase().includes('cvs');
+
+    return containsCVS
+      ? {
+          indicatorPharmacyTwentyFourHoursOpen: pharmacy.open24hours
+            ? 'Y'
+            : 'N',
+          instorePickupService: pharmacy.instorePickupService ? 'Y' : 'N',
+          indicatorDriveThruService: pharmacy.driveThru ? 'Y' : 'N',
+          pharmacyHours: {
+            dayHours: pharmacy.open24Hours
+              ? []
+              : pharmacy.pharmacyHours?.dayHours || []
+          }
+        }
+      : null;
+  }
+
+  public mapAddressDetails(
+    address: Address,
+    includePhoneNumber = true
+  ): Address {
+    const mappedAddress: any = {
+      line: address.line || [''],
+      city: address.city || '',
+      state: address.state || '',
+      postalCode: address.postalCode || ''
+    };
+
+    if (includePhoneNumber && address.phoneNumber) {
+      mappedAddress.phoneNumber = address.phoneNumber.replaceAll('-', '');
+    }
+
+    return mappedAddress;
+  }
+
+  public getCurrentDate(): string {
+    const now = new Date();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const year = String(now.getFullYear());
+
+    return `${month}/${day}/${year}`;
+  }
+
+  public formatDate(dateString: string | null | undefined): string {
+    if (!dateString) {
+      return this.getCurrentDate();
+    }
+    const [year, month, day] = dateString.split('-');
+
+    if (!year || !month || !day) {
+      return this.getCurrentDate();
+    }
+
+    return `${month.padStart(2, '0')}/${day.padStart(2, '0')}/${year}`;
   }
 }
