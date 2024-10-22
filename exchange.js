@@ -1,70 +1,66 @@
-Effects
-
-
 import { inject, Injectable } from '@angular/core';
 import { errorMessage } from '@digital-blocks/angular/core/util/error-handler';
 import { Actions, createEffect, ofType } from '@ngrx/effects';
 import { Store } from '@ngrx/store';
-import { catchError, map, of, switchMap } from 'rxjs';
-
+import { catchError, map, of, switchMap, withLatestFrom } from 'rxjs';
 import { MemberAuthenticationService } from '../services/member-authentication.service';
-
 import { MemberAuthenticationActions } from './member-authentication.actions';
 import { GetMemberInfoAndTokenResponse } from './member-authentication.interfaces';
 import { MemberAuthenticationState } from './member-authentication.reducer';
+import { SsrAuthFacade } from '@digital-blocks/angular/pharmacy/shared/store/ssr-auth';
 
 @Injectable()
 export class MemberAuthenticationEffects {
   private readonly actions$ = inject(Actions);
   private readonly memberAuthService = inject(MemberAuthenticationService);
   private readonly store = inject(Store<MemberAuthenticationState>);
+  private readonly ssrAuthFacade = inject(SsrAuthFacade);
   private readonly errorTag = 'MemberAuthenticationEffects';
 
   public getMemberInfoAndToken$ = createEffect(() => {
     return this.actions$.pipe(
       ofType(MemberAuthenticationActions.getMemberInfoAndToken),
       switchMap(({ request, useTransferSecret }) => {
-        return this.memberAuthService
-          .getMemberInfoAndToken(request, useTransferSecret)
-          .pipe(
-            map((response) => {
-              const memberTokenResponse: GetMemberInfoAndTokenResponse =
-                response;
-
-              return response?.statusCode === '0000'
-                ? MemberAuthenticationActions.getMemberInfoAndTokenSuccess({
-                    memberTokenResponse
-                  })
-                : MemberAuthenticationActions.getMemberInfoAndTokenFailure({
-                    error: errorMessage(
-                      this.errorTag,
-                      'B2B Member Authentication API failed'
-                    )
-                  });
-            }),
-            catchError((error: unknown) => {
-              return of(
-                MemberAuthenticationActions.getMemberInfoAndTokenFailure({
-                  error: errorMessage(this.errorTag, error)
-                })
-              );
-            })
-          );
+        // First, get a fresh SSR Auth token
+        this.ssrAuthFacade.getSsrAuth(useTransferSecret);
+        return this.ssrAuthFacade.ssrAuth$.pipe(
+          take(1),
+          switchMap(ssrAuth => {
+            if (!ssrAuth?.access_token) {
+              throw new Error('Failed to obtain valid SSR Auth token');
+            }
+            // Then, call the member auth service with the fresh token
+            return this.memberAuthService.getMemberInfoAndToken(request, ssrAuth.access_token);
+          }),
+          map((response: GetMemberInfoAndTokenResponse) => {
+            return response?.statusCode === '0000'
+              ? MemberAuthenticationActions.getMemberInfoAndTokenSuccess({ memberTokenResponse: response })
+              : MemberAuthenticationActions.getMemberInfoAndTokenFailure({
+                  error: errorMessage(this.errorTag, 'B2B Member Authentication API failed')
+                });
+          }),
+          catchError((error: unknown) => {
+            return of(
+              MemberAuthenticationActions.getMemberInfoAndTokenFailure({
+                error: errorMessage(this.errorTag, error)
+              })
+            );
+          })
+        );
       })
     );
   });
 }
 
 
-Member-auth service
+Service: 
 
 import { Injectable, inject, PLATFORM_ID } from '@angular/core';
 import { isPlatformServer } from '@angular/common';
 import { HttpHeaders, HttpErrorResponse } from '@angular/common/http';
 import { ConfigFacade } from '@digital-blocks/angular/core/store/config';
 import { HttpService, mapResponseBody } from '@digital-blocks/angular/core/util/services';
-import { SsrAuthFacade } from '@digital-blocks/angular/pharmacy/shared/store/ssr-auth';
-import { catchError, filter, map, Observable, of, switchMap, throwError, take, tap, retryWhen, concatMap } from 'rxjs';
+import { catchError, filter, Observable, switchMap, throwError, take, tap } from 'rxjs';
 import { GetMemberInfoAndTokenRequest, GetMemberInfoAndTokenResponse } from '../+state/member-authentication.interfaces';
 import { b2bConfig } from './member-authentication.config';
 
@@ -72,82 +68,13 @@ import { b2bConfig } from './member-authentication.config';
   providedIn: 'root'
 })
 export class MemberAuthenticationService {
-  private readonly ssrAuthFacade = inject(SsrAuthFacade);
   private readonly configFacade = inject(ConfigFacade);
   private readonly httpService = inject(HttpService);
   private readonly platformId = inject(PLATFORM_ID);
 
-  private tokenInfo: { token: string; expiresAt: number } | null = null;
-
-  getMemberInfoAndToken(request: GetMemberInfoAndTokenRequest, useTransferSecret = true): Observable<GetMemberInfoAndTokenResponse> {
+  getMemberInfoAndToken(request: GetMemberInfoAndTokenRequest, ssrToken: string): Observable<GetMemberInfoAndTokenResponse> {
     console.log('getMemberInfoAndToken called with:', request);
-    return this.getValidToken(useTransferSecret).pipe(
-      switchMap(token => this.makeB2BCallWithRetry(request, token, useTransferSecret)),
-      catchError(this.handleError)
-    );
-  }
-
-  private getValidToken(useTransferSecret: boolean): Observable<string> {
-    if (this.isTokenValid()) {
-      console.log('Using cached token');
-      return of(this.tokenInfo!.token);
-    }
-    console.log('No valid token, refreshing');
-    return this.refreshToken(useTransferSecret);
-  }
-
-  private isTokenValid(): boolean {
-    const isValid = !!this.tokenInfo && Date.now() < this.tokenInfo.expiresAt - 5 * 60 * 1000;
-    console.log('Token validity check:', isValid);
-    return isValid;
-  }
-
-  private refreshToken(useTransferSecret: boolean): Observable<string> {
-    console.log('Refreshing token, useTransferSecret:', useTransferSecret);
-    this.ssrAuthFacade.getSsrAuth(useTransferSecret);
-    return this.ssrAuthFacade.ssrAuth$.pipe(
-      take(1),
-      tap(ssrAuth => console.log('SSR Auth response received:', ssrAuth ? 'Valid response' : 'Null response')),
-      map(ssrAuth => {
-        if (ssrAuth?.access_token && ssrAuth.expires_in) {
-          console.log('Valid token received from SSR Auth');
-          this.tokenInfo = {
-            token: ssrAuth.access_token,
-            expiresAt: Date.now() + Number(ssrAuth.expires_in) * 1000
-          };
-          return this.tokenInfo.token;
-        } else {
-          throw new Error('Failed to obtain valid token from SSR Auth');
-        }
-      }),
-      catchError(error => {
-        console.error('Error in refreshToken:', error);
-        throw error;
-      })
-    );
-  }
-
-  private makeB2BCallWithRetry(request: GetMemberInfoAndTokenRequest, token: string, useTransferSecret: boolean): Observable<GetMemberInfoAndTokenResponse> {
-    return this.makeB2BCall(request, token).pipe(
-      retryWhen(errors =>
-        errors.pipe(
-          concatMap((error, index) => {
-            if (index >= 2) {
-              return throwError(() => error);
-            }
-            if (error instanceof HttpErrorResponse && error.status === 401) {
-              console.log('B2B call failed with 401, refreshing token and retrying');
-              return this.refreshToken(useTransferSecret);
-            }
-            if (error.statusCode === "1009" && error.statusDescription === "Access token is no longer valid") {
-              console.log('B2B call failed with status 1009, refreshing token and retrying');
-              return this.refreshToken(useTransferSecret);
-            }
-            return throwError(() => error);
-          })
-        )
-      )
-    );
+    return this.makeB2BCall(request, ssrToken);
   }
 
   private makeB2BCall(request: GetMemberInfoAndTokenRequest, token: string): Observable<GetMemberInfoAndTokenResponse> {
@@ -181,10 +108,5 @@ export class MemberAuthenticationService {
         );
       })
     );
-  }
-
-  private handleError(error: any): Observable<never> {
-    console.error('Error in getMemberInfoAndToken:', error);
-    return throwError(() => new Error('Failed to get member info and token'));
   }
 }
