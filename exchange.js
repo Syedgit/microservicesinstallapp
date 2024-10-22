@@ -1,11 +1,9 @@
-component
-
 import { Injectable, inject } from '@angular/core';
 import { HttpHeaders } from '@angular/common/http';
 import { ConfigFacade } from '@digital-blocks/angular/core/store/config';
 import { HttpService, mapResponseBody } from '@digital-blocks/angular/core/util/services';
 import { SsrAuthFacade } from '@digital-blocks/angular/pharmacy/shared/store/ssr-auth';
-import { Observable, switchMap, take, tap, throwError } from 'rxjs';
+import { Observable, switchMap, take, tap, throwError, of, map } from 'rxjs';
 import { GetMemberInfoAndTokenRequest, GetMemberInfoAndTokenResponse } from '../+state/member-authentication.interfaces';
 import { b2bConfig } from './member-authentication.config';
 
@@ -17,248 +15,76 @@ export class MemberAuthenticationService {
   private readonly httpService = inject(HttpService);
   private readonly ssrAuthFacade = inject(SsrAuthFacade);
 
+  // Track the current SSR token and expiration time
+  private ssrAccessToken: string | null = null;
+  private tokenExpirationTime: number | null = null;
+
+  /**
+   * This method gets the member info and token by first ensuring that
+   * a valid SSR Auth token is available and then making the B2B call.
+   */
   getMemberInfoAndToken(request: GetMemberInfoAndTokenRequest, useTransferSecret = true): Observable<GetMemberInfoAndTokenResponse> {
     console.log('getMemberInfoAndToken called with:', request);
     
-    // Trigger SSR Auth token retrieval
+    // Step 1: Ensure valid SSR Auth token and then proceed with B2B call
+    return this.getValidSsrToken(useTransferSecret).pipe(
+      switchMap(ssrToken => {
+        if (!ssrToken) {
+          console.error('Failed to obtain valid SSR Auth token');
+          return throwError(() => new Error('Failed to obtain valid SSR Auth token'));
+        }
+
+        console.log('SSR Token received, making B2B call');
+        // Step 2: Make the B2B call using the SSR token
+        return this.makeB2BCall(request, ssrToken);
+      })
+    );
+  }
+
+  /**
+   * This method retrieves a valid SSR token, checking expiration if necessary.
+   * @param useTransferSecret - whether to use the transfer secret.
+   * @returns an Observable of the SSR token.
+   */
+  private getValidSsrToken(useTransferSecret: boolean): Observable<string | null> {
+    const tokenAgeInSeconds = 15 * 60; // 15 minutes (expires_in = 899)
+    
+    // Check if the current SSR token is valid and hasn't expired
+    if (this.ssrAccessToken && this.tokenExpirationTime && Date.now() < this.tokenExpirationTime) {
+      console.log('Returning cached SSR token');
+      return of(this.ssrAccessToken);
+    }
+
+    // Step 1: Trigger SSR Auth process to get a new token
     this.ssrAuthFacade.getSsrAuth(useTransferSecret);
     
-    // Wait for the SSR Auth token and then immediately make the B2B call
+    // Step 2: Wait for SSR Auth token
     return this.ssrAuthFacade.ssrAuth$.pipe(
-      take(1),
-      tap(ssrAuth => console.log('SSR Auth token received:', ssrAuth?.access_token ? 'Valid token' : 'No token')),
-      switchMap(ssrAuth => {
-        if (!ssrAuth?.access_token) {
-          console.error('Failed to obtain SSR Auth token');
-          return throwError(() => new Error('Failed to obtain SSR Auth token'));
+      take(1), // We only need the first emitted value
+      map(ssrAuth => {
+        if (ssrAuth && ssrAuth.access_token && ssrAuth.expires_in) {
+          // Convert expires_in to a number and set the expiration time
+          const expiresInNumber = Number(ssrAuth.expires_in);
+          if (!isNaN(expiresInNumber)) {
+            this.ssrAccessToken = ssrAuth.access_token;
+            this.tokenExpirationTime = Date.now() + expiresInNumber * 1000; // Set expiration in milliseconds
+            console.log('New SSR token cached with expiration time:', this.tokenExpirationTime);
+          }
         }
-        console.log('Making B2B call with SSR Auth token');
-        return this.makeB2BCall(request, ssrAuth.access_token);
+        return this.ssrAccessToken;
       })
     );
   }
 
+  /**
+   * Makes the B2B call using the current SSR access token.
+   * @param request - The member authentication request.
+   * @param token - The SSR Auth token to use for the B2B call.
+   * @returns an Observable of the B2B response.
+   */
   private makeB2BCall(request: GetMemberInfoAndTokenRequest, token: string): Observable<GetMemberInfoAndTokenResponse> {
     return this.configFacade.config$.pipe(
-      take(1),
-      switchMap(config => {
-        const headers = new HttpHeaders({
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'x-experienceId': b2bConfig.expId,
-          'x-api-key': config.b2bApiKey
-        });
-
-        console.log('B2B call headers set, making the call');
-        return this.httpService.post<GetMemberInfoAndTokenResponse>(
-          `${config.environment.basePath}${b2bConfig.b2bUrl}`,
-          b2bConfig.MOCK,
-          { headers },
-          { data: { idType: 'PBM_QL_ENC_PARTICIPANT_ID_TYPE', lookupReq: request.data.lookupReq } },
-          { maxRequestTime: 20_000 }
-        ).pipe(
-          tap(() => console.log('B2B call completed')),
-          mapResponseBody()
-        );
-      })
-    );
-  }
-}
-
-store.ts
-
-import { Injectable, inject } from '@angular/core';
-import { UserAnalyticsFacade } from '@digital-blocks/angular/core/store/user-analytics';
-import { CurrentPrescriptionsFacade } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/current-prescriptions';
-import {
-  MemberAuthenticationFacade,
-  GetMemberInfoAndTokenRequest,
-  MemberInfo,
-  GetMemberInfoAndTokenResponse
-} from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/member-authentication';
-import { PrescriptionsListFacade } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/prescriptions-list';
-import { SearchPharmacyFacade } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/search-pharmacy';
-import { SelectPharmacyFacade } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/select-pharmacy';
-import {
-  TransferPrescriptionsFacade,
-  ITransferPrescriptionCmsContents
-} from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/transfer-prescriptions';
-import { Observable } from 'rxjs';
-
-@Injectable()
-export class MemberAuthenticationStore {
-  protected readonly memberAuthFacade = inject(MemberAuthenticationFacade);
-  protected readonly userAnalyticsFacade = inject(UserAnalyticsFacade);
-  protected readonly transferPrescriptionsFacade = inject(
-    TransferPrescriptionsFacade
-  );
-  protected readonly currentPrescriptionsFacade = inject(
-    CurrentPrescriptionsFacade
-  );
-  protected readonly prescriptionsListFacade = inject(PrescriptionsListFacade);
-  protected readonly searchPharmacyFacade = inject(SearchPharmacyFacade);
-  protected readonly selectPharmacyFacade = inject(SelectPharmacyFacade);
-  public readonly memberTokenResponse$: Observable<GetMemberInfoAndTokenResponse> =
-    this.memberAuthFacade.memberTokenResponse$;
-  public readonly loading$: Observable<boolean> =
-    this.memberAuthFacade.loading$;
-  public readonly error$: Observable<unknown> = this.memberAuthFacade.error$;
-  public getMemberInfoAndToken(patientInfo: MemberInfo): void {
-    const request: GetMemberInfoAndTokenRequest = {
-      data: {
-        idType: 'PBM_QL_ENC_PARTICIPANT_ID_TYPE',
-        lookupReq: patientInfo
-      }
-    };
-
-    this.memberAuthFacade.getMemberInfoAndToken(request);
-  }
-
-  public saveMemberInfoRehydrate(rehydrateValue: string[]): void {
-    this.memberAuthFacade.saveMemberInfoRehydrate(rehydrateValue);
-  }
-
-  public readonly cmsSpotContents$: Observable<
-    ITransferPrescriptionCmsContents | undefined
-  > = this.transferPrescriptionsFacade.transferPrescriptionsCmsContents$;
-
-  public resetAllStateValues() {
-    this.memberAuthFacade?.resetMemberAuthentication?.();
-    this.currentPrescriptionsFacade?.resetCurrentPrescription?.();
-    this.prescriptionsListFacade?.resetPrescriptionsList?.();
-    this.searchPharmacyFacade?.resetSearchPharmacy?.();
-    this.selectPharmacyFacade?.resetSelectPharmacy?.();
-    this.transferPrescriptionsFacade?.setTransferSessionExpire?.(false);
-  }
-}
-
-actions.ts 
-
-import { ReportableError } from '@digital-blocks/angular/core/util/error-handler';
-import { createActionGroup, props, emptyProps } from '@ngrx/store';
-
-import {
-  GetMemberInfoAndTokenRequest,
-  GetMemberInfoAndTokenResponse
-} from './member-authentication.interfaces';
-
-export const MemberAuthenticationActions = createActionGroup({
-  source: 'MemberAuthentication',
-  events: {
-    'Get Member Info And Token': props<{
-      request: GetMemberInfoAndTokenRequest;
-      useTransferSecret: boolean;
-    }>(),
-    'Get Member Info And Token Success': props<{
-      memberTokenResponse: GetMemberInfoAndTokenResponse;
-    }>(),
-    'Get Member Info And Token Failure': props<{ error: ReportableError }>(),
-    'Save Member Info Rehydrate Value': props<{
-      rehydrate: string[];
-    }>(),
-    'Reset MemberAuthentication State': emptyProps()
-  }
-});
-
-effects
-
-import { inject, Injectable } from '@angular/core';
-import { errorMessage } from '@digital-blocks/angular/core/util/error-handler';
-import { Actions, createEffect, ofType } from '@ngrx/effects';
-import { Store } from '@ngrx/store';
-import { catchError, map, of, switchMap } from 'rxjs';
-
-import { MemberAuthenticationService } from '../services/member-authentication.service';
-
-import { MemberAuthenticationActions } from './member-authentication.actions';
-import { GetMemberInfoAndTokenResponse } from './member-authentication.interfaces';
-import { MemberAuthenticationState } from './member-authentication.reducer';
-
-@Injectable()
-export class MemberAuthenticationEffects {
-  private readonly actions$ = inject(Actions);
-  private readonly memberAuthService = inject(MemberAuthenticationService);
-  private readonly store = inject(Store<MemberAuthenticationState>);
-  private readonly errorTag = 'MemberAuthenticationEffects';
-
-  public getMemberInfoAndToken$ = createEffect(() => {
-    return this.actions$.pipe(
-      ofType(MemberAuthenticationActions.getMemberInfoAndToken),
-      switchMap(({ request, useTransferSecret }) => {
-        return this.memberAuthService
-          .getMemberInfoAndToken(request, useTransferSecret)
-          .pipe(
-            map((response) => {
-              const memberTokenResponse: GetMemberInfoAndTokenResponse =
-                response;
-
-              return response?.statusCode === '0000'
-                ? MemberAuthenticationActions.getMemberInfoAndTokenSuccess({
-                    memberTokenResponse
-                  })
-                : MemberAuthenticationActions.getMemberInfoAndTokenFailure({
-                    error: errorMessage(
-                      this.errorTag,
-                      'B2B Member Authentication API failed'
-                    )
-                  });
-            }),
-            catchError((error: unknown) => {
-              return of(
-                MemberAuthenticationActions.getMemberInfoAndTokenFailure({
-                  error: errorMessage(this.errorTag, error)
-                })
-              );
-            })
-          );
-      })
-    );
-  });
-}
-
-Service
-
-import { Injectable, inject } from '@angular/core';
-import { HttpHeaders } from '@angular/common/http';
-import { ConfigFacade } from '@digital-blocks/angular/core/store/config';
-import { HttpService, mapResponseBody } from '@digital-blocks/angular/core/util/services';
-import { SsrAuthFacade } from '@digital-blocks/angular/pharmacy/shared/store/ssr-auth';
-import { Observable, switchMap, take, tap, throwError } from 'rxjs';
-import { GetMemberInfoAndTokenRequest, GetMemberInfoAndTokenResponse } from '../+state/member-authentication.interfaces';
-import { b2bConfig } from './member-authentication.config';
-
-@Injectable({
-  providedIn: 'root'
-})
-export class MemberAuthenticationService {
-  private readonly configFacade = inject(ConfigFacade);
-  private readonly httpService = inject(HttpService);
-  private readonly ssrAuthFacade = inject(SsrAuthFacade);
-
-  getMemberInfoAndToken(request: GetMemberInfoAndTokenRequest, useTransferSecret = true): Observable<GetMemberInfoAndTokenResponse> {
-    console.log('getMemberInfoAndToken called with:', request);
-    
-    // Trigger SSR Auth token retrieval
-    this.ssrAuthFacade.getSsrAuth(useTransferSecret);
-    
-    // Wait for the SSR Auth token and then immediately make the B2B call
-    return this.ssrAuthFacade.ssrAuth$.pipe(
-      take(1),
-      tap(ssrAuth => console.log('SSR Auth token received:', ssrAuth?.access_token ? 'Valid token' : 'No token')),
-      switchMap(ssrAuth => {
-        if (!ssrAuth?.access_token) {
-          console.error('Failed to obtain SSR Auth token');
-          return throwError(() => new Error('Failed to obtain SSR Auth token'));
-        }
-        console.log('Making B2B call with SSR Auth token');
-        return this.makeB2BCall(request, ssrAuth.access_token);
-      })
-    );
-  }
-
-  private makeB2BCall(request: GetMemberInfoAndTokenRequest, token: string): Observable<GetMemberInfoAndTokenResponse> {
-    return this.configFacade.config$.pipe(
-      take(1),
+      take(1), // Get the configuration once
       switchMap(config => {
         const headers = new HttpHeaders({
           'Content-Type': 'application/json',
