@@ -1,23 +1,48 @@
-public mapAddressDetails(
-  address: Address,
-  isPharmacy = false
-): Address {
-  const mappedAddress: Address = {
-    line: address.line || [''],
-    city: address.city || '',
-    state: address.state || '',
-    postalCode: address.postalCode || ''
-  };
+ public submitTransfer(): void {
+    try {
+      if (this.currentPrescriptions.length > 0 && this.selectedPharmacy) {
+        const transferOrderRequest = this.buildTransferOrderRequest(
+          this.currentPrescriptions
+        );
 
-  // If it's a pharmacy, use the phone number from the address
-  if (isPharmacy && address.phoneNumber) {
-    mappedAddress.phoneNumber = address.phoneNumber.replaceAll('-', '');
+        this.store.submitTransfer(transferOrderRequest);
+        this.store.submitTransferResponse$.subscribe((response) => {
+          if (response) {
+            if (response.statusCode === '0000') {
+              this.handleSuccess();
+            } else {
+              this.handleError(response);
+            }
+          }
+        });
+      } else {
+        this.store.setStateFailure(true);
+        throw new Error('No prescriptions selected for transfer');
+      }
+    } catch (error) {
+      this.store.setStateFailure(true);
+      errorMessage('submitTransferFailure', error);
+      throw error;
+    }
   }
 
-  // If it's not a pharmacy (i.e., it's a member), use the cardHolderPhoneNum
-  if (!isPharmacy && this.cardHolderPhoneNum) {
-    mappedAddress.phoneNumber = this.cardHolderPhoneNum.replaceAll('-', '');
-  }
+Response :
 
-  return mappedAddress;
+{
+    "statusCode": "0000",
+    "statusDescription": "Success",
+    "data": {
+        "submitExternalTransfer": [
+            {
+                "statusCode": "0000",
+                "statusDescription": "Success",
+                "confirmationNumber": "TU20241022160335XM3X"
+            },
+            {
+                "statusCode": "0002",
+                "statusDescription": "Failure",
+                "confirmationNumber": "TU202410221603353EDJ"
+            }
+        ]
+    }
 }
