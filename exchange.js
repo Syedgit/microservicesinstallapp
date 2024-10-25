@@ -1,251 +1,259 @@
-<!-- eslint-disable @angular-eslint/template/no-call-expression -->
-<ng-container *ngIf="loading$ | async; else memberAuthTemplate">
-  <ps-tile>
-    <util-spinning-loader [loading]="loading$ | async"></util-spinning-loader>
-  </ps-tile>
-</ng-container>
-
-<ng-template #memberAuthTemplate>
-  <div class="member-container">
-    @if (hasErrors) {
-      <ps-alert-bar class="alert-banner">
-        <ps-label>Required Information is missing</ps-label>
-        <p>Please complete all fields.</p>
-      </ps-alert-bar>
-    }
-    <div class="sub-header-content">
-      <lib-transfer-prescriptions-sub-header
-        [isCmsHeading]="true"
-        [heading]="
-          (store.cmsSpotContents$ | async)?.TransferRxIntroHyveeSpot ?? ''
-        "></lib-transfer-prescriptions-sub-header>
-    </div>
-    <p>All fields required.</p>
-    <ng-container>
-      <form [formGroup]="memberForm">
-        <ps-input
-          label="First Name"
-          [error]="
-            hasErrors
-              ? memberForm.get('firstName')?.hasError('pattern')
-                ? errors.F_NAME_PTRN
-                : memberForm.get('firstName')?.hasError('required')
-                  ? errors.F_NAME_ERROR
-                  : undefined
-              : memberForm.get('firstName')?.hasError('pattern')
-                ? errors.F_NAME_PTRN
-                : undefined
-          ">
-          <input
-            formControlName="firstName"
-            ngDefaultControl
-            slot="input"
-            required
-            is-error-announced="true" />
-        </ps-input>
-        <ps-input
-          label="Last Name"
-          [error]="
-            hasErrors
-              ? memberForm.get('lastName')?.hasError('pattern')
-                ? errors.L_NAME_PTRN
-                : memberForm.get('lastName')?.hasError('required')
-                  ? errors.L_NAME_ERROR
-                  : undefined
-              : memberForm.get('lastName')?.hasError('pattern')
-                ? errors.L_NAME_PTRN
-                : undefined
-          ">
-          <input
-            formControlName="lastName"
-            ngDefaultControl
-            input-required="true"
-            slot="input"
-            is-error-announced="true" />
-        </ps-input>
-        <ps-date-fieldset legend="Date of Birth" is-dob>
-          <!-- eslint-disable-next-line -- custom inputs are needed -->
-          <input slot="month" formControlName="month" ngDefaultControl />
-          <!-- eslint-disable-next-line -- custom inputs are needed -->
-          <input slot="day" formControlName="day" ngDefaultControl />
-          <!-- eslint-disable-next-line -- custom inputs are needed -->
-          <input slot="year" formControlName="year" ngDefaultControl />
-          <ul *ngIf="validateDate()" slot="error">
-            <li>{{ formErrors['dateOfBirth'] }}</li>
-          </ul>
-        </ps-date-fieldset>
-        <ps-input
-          label="Member ID"
-          [error]="
-            hasErrors && !memberForm.controls['memberId'].valid
-              ? errors.MEM_ID_ERROR
-              : backendErr
-                ? errors.MEM_ID_BACKEND_ERR
-                : undefined
-          ">
-          <input
-            formControlName="memberId"
-            ngDefaultControl
-            name="memberId"
-            slot="input"
-            input-required="true"
-            is-error-announced="true" />
-        </ps-input>
-        <div>
-          <ps-button
-            is-full-width="true"
-            size="md"
-            submit="true"
-            variant="solid"
-            [isFullWidth]="layoutFacade.breakpointSmall$ | async"
-            (keydown)="handleKeyDown($event)"
-            (click)="getMemberInfoAndToken()"
-            class="continue-button">
-            Continue
-          </ps-button>
-        </div>
-      </form>
-    </ng-container>
-  </div>
-</ng-template>
-
-
-
-import { RehydrateState } from '@digital-blocks/angular/core/store/rehydrate';
-import { ReportableError } from '@digital-blocks/angular/core/util/error-handler';
-import { ActionReducer, createFeature, createReducer, on } from '@ngrx/store';
-
-import { MemberAuthenticationActions } from './member-authentication.actions';
+/* eslint-disable @typescript-eslint/no-non-null-assertion -- memberForm.get('var') should always be initialized*/
+/* eslint-disable ternary/nesting -- error for validate form fields*/
+import { CommonModule } from '@angular/common';
 import {
-  GetMemberInfoAndTokenResponse,
-  MemberInfo
-} from './member-authentication.interfaces';
+  Component,
+  CUSTOM_ELEMENTS_SCHEMA,
+  inject,
+  Input,
+  OnInit,
+  Renderer2
+} from '@angular/core';
+import {
+  FormBuilder,
+  FormGroup,
+  FormsModule,
+  ReactiveFormsModule,
+  Validators
+} from '@angular/forms';
+import { SpinningLoaderComponent } from '@digital-blocks/angular/core/components';
+import { LayoutFacade } from '@digital-blocks/angular/core/store/layout';
+import { RehydrateFacade } from '@digital-blocks/angular/core/store/rehydrate';
+import { NavigationService } from '@digital-blocks/angular/core/util/services';
+import { SanitizeHtmlPipe } from '@digital-blocks/angular/pharmacy/shared/util/pipe';
+import { TransferPrescriptionsSubHeaderComponent } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/components';
+import {
+  MemberInfo,
+  MemberAuthenticationModule,
+  GetMemberInfoAndTokenResponse
+} from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/member-authentication';
+import { ITransferPrescriptionCmsContents } from '@digital-blocks/angular/pharmacy/transfer-prescriptions/store/transfer-prescriptions';
+import { filter, Observable, of, switchMap } from 'rxjs';
 
-export interface MemberAuthenticationState extends RehydrateState {
-  memberTokenResponse: GetMemberInfoAndTokenResponse;
-  loading: boolean;
-  error: ReportableError | undefined;
-  patientInfo: MemberInfo;
-}
+import { AdobeTaggingConstants, Constants } from './member-authentication.constant';
+import { MemberAuthenticationStore } from './member-authentication.store';
 
-export const initialState: MemberAuthenticationState = {
-  memberTokenResponse: {
-    statusCode: '',
-    statusDescription: '',
-    token_type: '',
-    access_token: ''
-  },
-  loading: false,
-  error: undefined,
-  patientInfo: {
-    memberId: '',
+@Component({
+  selector: 'lib-member-authentication',
+  standalone: true,
+  imports: [
+    CommonModule,
+    FormsModule,
+    ReactiveFormsModule,
+    MemberAuthenticationModule,
+    SpinningLoaderComponent,
+    TransferPrescriptionsSubHeaderComponent,
+    SanitizeHtmlPipe
+  ],
+  templateUrl: 'member-authentication.component.html',
+  styleUrls: ['member-authentication.component.scss'],
+  schemas: [CUSTOM_ELEMENTS_SCHEMA],
+  providers: [MemberAuthenticationStore],
+  host: { ngSkipHydration: 'true' }
+})
+export class MemberAuthenticationComponent implements OnInit {
+  @Input() public heading = '';
+  protected readonly navigationService = inject(NavigationService);
+  protected readonly layoutFacade = inject(LayoutFacade);
+  public readonly store = inject(MemberAuthenticationStore);
+  private readonly rehydrateFacade = inject(RehydrateFacade);
+  private fb = inject(FormBuilder);
+  public readonly memberTokenResponse$ = this.store.memberTokenResponse$;
+  public readonly loading$ = this.store.loading$;
+  public content: ITransferPrescriptionCmsContents | undefined;
+  public readonly error$: Observable<unknown> = this.store.error$;
+  public hasErrors = false;
+  public errors = Constants;
+  public backendErr = false;
+  memberForm: FormGroup;
+  public eventCalled = 'initial';
+
+  public formErrors: { [key: string]: string } = {
     firstName: '',
     lastName: '',
-    dateOfBirth: '',
-    flowName: '',
-    source: ''
-  },
-  rehydrate: ['patientInfo']
-};
+    memberId: '',
+    dateOfBirth: ''
+  };
 
-export const MEMBER_AUTHENTICATION_FEATURE_KEY = 'member-authentication';
+  constructor(private rendered: Renderer2) {
+    this.memberForm = this.fb.group({
+      firstName: ['', [Validators.required, Validators.pattern('^[a-zA-Z]+$')]],
+      lastName: ['', [Validators.required, Validators.pattern('^[a-zA-Z]+$')]],
+      month: [''],
+      day: [''],
+      year: [''],
+      dateOfBirth: [''],
+      memberId: ['', [Validators.required]]
+    });
+  }
 
-export const reducer: ActionReducer<MemberAuthenticationState> = createReducer(
-  initialState,
-  on(MemberAuthenticationActions.getMemberInfoAndToken, (state) => ({
-    ...state,
-    loading: true,
-    error: undefined
-  })),
-  on(
-    MemberAuthenticationActions.getMemberInfoAndTokenSuccess,
-    (state, { memberTokenResponse }) => ({
-      ...state,
-      memberTokenResponse,
-      loading: false,
-      error: undefined
-    })
-  ),
-  on(
-    MemberAuthenticationActions.getMemberInfoAndTokenFailure,
-    (state, { error }) => ({
-      ...state,
-      loading: false,
-      error
-    })
-  ),
-  on(
-    MemberAuthenticationActions.saveMemberInfoRehydrateValue,
-    (state, { rehydrate }) => ({
-      ...state,
-      rehydrate
-    })
-  ),
-  on(MemberAuthenticationActions.resetMemberAuthenticationState, (state) => ({
-    ...state,
-    ...initialState
-  }))
-);
-
-export const MemberAuthenticationFeature = createFeature({
-  name: MEMBER_AUTHENTICATION_FEATURE_KEY,
-  reducer
-});
-
-
-effects
-
-
-import { inject, Injectable } from '@angular/core';
-import { errorMessage } from '@digital-blocks/angular/core/util/error-handler';
-import { Actions, createEffect, ofType } from '@ngrx/effects';
-import { Store } from '@ngrx/store';
-import { catchError, map, of, switchMap } from 'rxjs';
-
-import { MemberAuthenticationService } from '../services/member-authentication.service';
-
-import { MemberAuthenticationActions } from './member-authentication.actions';
-import { GetMemberInfoAndTokenResponse } from './member-authentication.interfaces';
-import { MemberAuthenticationState } from './member-authentication.reducer';
-
-@Injectable()
-export class MemberAuthenticationEffects {
-  private readonly actions$ = inject(Actions);
-  private readonly memberAuthService = inject(MemberAuthenticationService);
-  private readonly store = inject(Store<MemberAuthenticationState>);
-  private readonly errorTag = 'MemberAuthenticationEffects';
-
-  public getMemberInfoAndToken$ = createEffect(() => {
-    return this.actions$.pipe(
-      ofType(MemberAuthenticationActions.getMemberInfoAndToken),
-      switchMap(({ request, useTransferSecret }) => {
-        return this.memberAuthService
-          .getMemberInfoAndToken(request, useTransferSecret)
-          .pipe(
-            map((response) => {
-              const memberTokenResponse: GetMemberInfoAndTokenResponse =
-                response;
-
-              return response?.statusCode === '0000'
-                ? MemberAuthenticationActions.getMemberInfoAndTokenSuccess({
-                    memberTokenResponse
-                  })
-                : MemberAuthenticationActions.getMemberInfoAndTokenFailure({
-                    error: errorMessage(
-                      this.errorTag,
-                      'B2B Member Authentication API failed'
-                    )
-                  });
-            }),
-            catchError((error: unknown) => {
-              return of(
-                MemberAuthenticationActions.getMemberInfoAndTokenFailure({
-                  error: errorMessage(this.errorTag, error)
-                })
-              );
-            })
-          );
-      })
+  ngOnInit(): void {
+    this.rehydrateFacade.rehydrated$.subscribe({
+      next: (rehydrated) => {
+        if (!rehydrated) {
+          this.store.saveMemberInfoRehydrate([]);
+        }
+      }
+    });
+    this.store.logMemberAuthPageView(
+      AdobeTaggingConstants.MEMBER_AUTH_PAGE_LOAD
     );
-  });
+  }
+
+  public getMemberInfoAndToken(): void {
+    this.validateDate();
+    this.validateFormFields();
+    this.formatDate();
+  
+    if (this.memberForm.valid && this.formErrors['dateOfBirth'] === '') {
+      this.store.resetAllStateValues();
+      this.deleteCookie();
+  
+      const patientInfo: MemberInfo = {
+        firstName: this.memberForm.get('firstName')!.value,
+        lastName: this.memberForm.get('lastName')!.value,
+        memberId: this.memberForm.get('memberId')!.value,
+        dateOfBirth: this.memberForm.get('dateOfBirth')!.value,
+        flowName: 'MEMBER_ID_LOOKUP',
+        source: 'CMK'
+      };
+      this.store.getMemberInfoAndToken(patientInfo);
+      this.store.memberTokenResponse$
+        .pipe(
+          filter((data: GetMemberInfoAndTokenResponse) => !!data && !!data.statusCode),
+          switchMap((data: GetMemberInfoAndTokenResponse) => {
+            if (data.statusCode === '0000' && data.access_token) {
+              this.navigationService.navigate(
+                '/pharmacy/benefits/transfer/current-prescriptions',
+                { queryParamsHandling: 'preserve' },
+                {
+                  navigateByPath: true
+                }
+              );
+              this.store.saveMemberInfoRehydrate(['patientInfo']);
+              this.store.logMemberAuthLink(
+                AdobeTaggingConstants.ONCLICK_CONTINUE.link_name,
+                AdobeTaggingConstants.ONCLICK_CONTINUE.details
+              );
+            } else {
+              const tagData = AdobeTaggingConstants.VALIDATION_ERROR;
+              this.store.logMemberAuthLink(tagData.link_name, {
+                field_errors: tagData.details.field_error,
+                error_messages: '1'
+              });
+              this.backendErr = true;
+              this.hasErrors = true;
+            }
+            return of(null);
+          })
+        )
+        .subscribe();
+    } else {
+      this.hasErrors = true;
+    }
+  }
+
+  formatDate() {
+    const m = this.memberForm.get('month')!.value;
+    const d = this.memberForm.get('day')!.value;
+    const y = this.memberForm.get('year')!.value;
+    const dateOfBirth = `${y}-${m}-${d}`;
+
+    this.memberForm.patchValue({
+      dateOfBirth: dateOfBirth
+    });
+
+    return dateOfBirth;
+  }
+
+  validateFormFields(): void {
+    this.formErrors['dateOfBirth'] = this.isDateValid();
+
+    this.formErrors['firstName'] = this.memberForm
+      .get('firstName')!
+      .hasError('required')
+      ? Constants.F_NAME_ERROR
+      : this.patternTernary();
+
+    this.formErrors['lastName'] = this.memberForm
+      .get('lastName')!
+      .hasError('required')
+      ? Constants.L_NAME_ERROR
+      : this.patternTernary();
+
+    this.formErrors['memberId'] = this.memberForm
+      .get('memberId')!
+      .hasError('required')
+      ? Constants.MEM_ID_ERROR
+      : '';
+  }
+
+  patternTernary(): string {
+    return this.memberForm.get('firstName')!.hasError('pattern')
+      ? Constants.F_NAME_PTRN
+      : '';
+  }
+
+  validateDate(): boolean {
+    if (
+      this.hasErrors ||
+      (this.memberForm.get('month')!.value != '' &&
+        this.memberForm.get('day')!.value != '' &&
+        this.memberForm.get('year')!.value != '')
+    )
+      this.formErrors['dateOfBirth'] = this.isDateValid();
+
+    return this.formErrors['dateOfBirth'] != '';
+  }
+
+  isDateValid() {
+    const m = +this.memberForm.get('month')!.value;
+    const d = +this.memberForm.get('day')!.value;
+    const y = +this.memberForm.get('year')!.value;
+
+    // creating date our of the year, month day
+    // 2/29/2023 turn into Mar 01 2023 so date.getDate() == d is false ( 01 != 29 )
+    // +num -> returns the numeric value of the string, or NaN if the string isn't purely numeric characters
+    // month goes from 0-11 instead of 1-12
+    const date = new Date(y, m - 1, d);
+
+    //validates leapyear and dates exceeding month
+    if (
+      Number.isNaN(date.getDate()) ||
+      y < 1000 ||
+      this.memberForm.get('month')!.value == '' ||
+      this.memberForm.get('day')!.value == '' ||
+      this.memberForm.get('year')!.value == ''
+    )
+      return Constants.DOB_PTRN_ERROR;
+    else if (
+      // date not valid
+      !date ||
+      date.getDate() != d ||
+      date.getMonth() != m - 1 ||
+      y < 1800 ||
+      new Date().getFullYear() < y
+    )
+      return Constants.DOB_INVALID_ERROR;
+    else return '';
+  }
+
+  handleKeyDown(event: KeyboardEvent): void {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+    }
+  }
+
+  deleteCookie(): void {
+    const cookieName = 'access_token';
+    const possiblePaths = ['/api/oauth2/v2', '/'];
+
+    if (typeof document === 'undefined') {
+      return;
+    }
+    for (const path of possiblePaths) {
+      // eslint-disable-next-line unicorn/no-document-cookie -- Necessary for testing
+      document.cookie = `${cookieName}=; Path=${path}; Expires=Thu, 01 Jan 1970 00:00:00 GMT;`;
+    }
+  }
 }
