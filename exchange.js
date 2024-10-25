@@ -16,12 +16,14 @@ public getMemberInfoAndToken(): void {
       source: 'CMK'
     };
 
-    // Make sure we wait for the response from the getMemberInfoAndToken method
+    // Make the call to getMemberInfoAndToken
     this.store.getMemberInfoAndToken(patientInfo);
 
-    // Use switchMap to ensure we wait for getMemberInfoAndToken to complete
+    // Subscribe to memberTokenResponse$ and filter out initial default state
     this.store.memberTokenResponse$
       .pipe(
+        // Filter out any default or empty state responses
+        filter((data: GetMemberInfoAndTokenResponse) => !!data && !!data.statusCode),
         switchMap((data: GetMemberInfoAndTokenResponse) => {
           if (data.statusCode === '0000' && data.access_token) {
             this.navigationService.navigate(
@@ -32,11 +34,12 @@ public getMemberInfoAndToken(): void {
               }
             );
             this.store.saveMemberInfoRehydrate(['patientInfo']);
-            this.store.logMemberAuthLink(AdobeTaggingConstants.ONCLICK_CONTINUE.link_name,
-              AdobeTaggingConstants.ONCLICK_CONTINUE.details);
-          } else if (data.statusCode !== '0000') {
+            this.store.logMemberAuthLink(
+              AdobeTaggingConstants.ONCLICK_CONTINUE.link_name,
+              AdobeTaggingConstants.ONCLICK_CONTINUE.details
+            );
+          } else {
             const tagData = AdobeTaggingConstants.VALIDATION_ERROR;
-
             this.store.logMemberAuthLink(tagData.link_name, {
               field_errors: tagData.details.field_error,
               error_messages: '1'
@@ -44,10 +47,10 @@ public getMemberInfoAndToken(): void {
             this.backendErr = true;
             this.hasErrors = true;
           }
-          return of(null); // Ensure a default return value for switchMap
+          return of(null);
         })
       )
-      .subscribe(); // Subscribe to handle the flow
+      .subscribe();
   } else {
     this.hasErrors = true;
   }
