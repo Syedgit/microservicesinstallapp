@@ -3,28 +3,12 @@ import { HttpHeaders } from '@angular/common/http';
 import { Injectable, inject, PLATFORM_ID } from '@angular/core';
 import { ConfigFacade } from '@digital-blocks/angular/core/store/config';
 import { Config } from '@digital-blocks/angular/core/util/config';
-import {
-  HttpService,
-  mapResponseBody
-} from '@digital-blocks/angular/core/util/services';
+import { HttpService, mapResponseBody } from '@digital-blocks/angular/core/util/services';
 import { SsrAuthFacade } from '@digital-blocks/angular/pharmacy/shared/store/ssr-auth';
-import {
-  catchError,
-  filter,
-  Observable,
-  of,
-  switchMap,
-  throwError,
-  take
-} from 'rxjs';
-
-import {
-  GetMemberInfoAndTokenRequest,
-  GetMemberInfoAndTokenResponse,
-  OauthResponse
-} from '../+state/member-authentication.interfaces';
-
+import { catchError, filter, Observable, of, switchMap, throwError, take } from 'rxjs';
+import { GetMemberInfoAndTokenRequest, GetMemberInfoAndTokenResponse, OauthResponse } from '../+state/member-authentication.interfaces';
 import { b2bConfig } from './member-authentication.config';
+import { Cookie } from 'some-cookie-library'; // Import your cookie handling library here
 
 @Injectable({
   providedIn: 'root'
@@ -44,12 +28,20 @@ export class MemberAuthenticationService {
     request: GetMemberInfoAndTokenRequest,
     useTransferSecret = true
   ): Observable<GetMemberInfoAndTokenResponse> {
+    const cookieToken = Cookie.get('access_token'); // Check if token is already present in cookies
+
+    if (cookieToken) {
+      // If cookie token exists, use it to make B2B call directly
+      return this.configFacade.config$.pipe(
+        filter((config) => !isPlatformServer(this.platformId) && !!config),
+        switchMap((config) => this.makeB2BCall(request, cookieToken, config))
+      );
+    }
+
+    // If no cookie token, proceed with SSR Auth
     this.ssrAuthFacade.getSsrAuth(useTransferSecret);
     return this.ssrAuthFacade.ssrAuth$.pipe(
-      filter(
-        (ssrAuth): ssrAuth is OauthResponse =>
-          !!ssrAuth && !!ssrAuth.access_token
-      ),
+      filter((ssrAuth): ssrAuth is OauthResponse => !!ssrAuth && !!ssrAuth.access_token),
       switchMap((ssrAuth) => {
         return this.configFacade.config$.pipe(
           filter((config) => !isPlatformServer(this.platformId) && !!config),
@@ -59,9 +51,7 @@ export class MemberAuthenticationService {
         );
       }),
       catchError((error: unknown) => {
-        return throwError(
-          () => new Error('Failed to get member info and token')
-        );
+        return throwError(() => new Error('Failed to get member info and token'));
       })
     );
   }
