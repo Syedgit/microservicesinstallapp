@@ -1,14 +1,32 @@
+service:
+
 import { isPlatformServer } from '@angular/common';
 import { HttpHeaders } from '@angular/common/http';
 import { Injectable, inject, PLATFORM_ID } from '@angular/core';
 import { ConfigFacade } from '@digital-blocks/angular/core/store/config';
 import { Config } from '@digital-blocks/angular/core/util/config';
-import { HttpService, mapResponseBody } from '@digital-blocks/angular/core/util/services';
+import {
+  HttpService,
+  mapResponseBody
+} from '@digital-blocks/angular/core/util/services';
 import { SsrAuthFacade } from '@digital-blocks/angular/pharmacy/shared/store/ssr-auth';
-import { catchError, filter, Observable, of, switchMap, throwError, take } from 'rxjs';
-import { GetMemberInfoAndTokenRequest, GetMemberInfoAndTokenResponse, OauthResponse } from '../+state/member-authentication.interfaces';
+import {
+  catchError,
+  filter,
+  Observable,
+  of,
+  switchMap,
+  throwError,
+  take
+} from 'rxjs';
+
+import {
+  GetMemberInfoAndTokenRequest,
+  GetMemberInfoAndTokenResponse,
+  OauthResponse
+} from '../+state/member-authentication.interfaces';
+
 import { b2bConfig } from './member-authentication.config';
-import { Cookie } from 'some-cookie-library'; // Import your cookie handling library here
 
 @Injectable({
   providedIn: 'root'
@@ -28,20 +46,13 @@ export class MemberAuthenticationService {
     request: GetMemberInfoAndTokenRequest,
     useTransferSecret = true
   ): Observable<GetMemberInfoAndTokenResponse> {
-    const cookieToken = Cookie.get('access_token'); // Check if token is already present in cookies
-
-    if (cookieToken) {
-      // If cookie token exists, use it to make B2B call directly
-      return this.configFacade.config$.pipe(
-        filter((config) => !isPlatformServer(this.platformId) && !!config),
-        switchMap((config) => this.makeB2BCall(request, cookieToken, config))
-      );
-    }
-
-    // If no cookie token, proceed with SSR Auth
     this.ssrAuthFacade.getSsrAuth(useTransferSecret);
+
     return this.ssrAuthFacade.ssrAuth$.pipe(
-      filter((ssrAuth): ssrAuth is OauthResponse => !!ssrAuth && !!ssrAuth.access_token),
+      filter(
+        (ssrAuth): ssrAuth is OauthResponse =>
+          !!ssrAuth && !!ssrAuth.access_token
+      ),
       switchMap((ssrAuth) => {
         return this.configFacade.config$.pipe(
           filter((config) => !isPlatformServer(this.platformId) && !!config),
@@ -51,7 +62,9 @@ export class MemberAuthenticationService {
         );
       }),
       catchError((error: unknown) => {
-        return throwError(() => new Error('Failed to get member info and token'));
+        return throwError(
+          () => new Error('Failed to get member info and token')
+        );
       })
     );
   }
@@ -133,3 +146,103 @@ export class MemberAuthenticationService {
     );
   }
 }
+
+config:
+
+export const b2bConfig = {
+  MOCK: 'assets/pharmacy/member-authentication/mock-data/experience_api/member-authentication.json',
+  b2bUrl: '/api/b2b/user/v1/token',
+  oAuth: '/api/oauth2/v2/token'
+  expId: '58e30ce4-7cef-4761-a082-11939da7704d'
+};
+
+
+SSrhttpService:
+
+import { HttpHeaders } from '@angular/common/http';
+import { Injectable, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { ConfigFacade } from '@digital-blocks/angular/core/store/config';
+import {
+  HttpSSRService,
+  mapResponseBody
+} from '@digital-blocks/angular/core/util/services';
+import { Observable, tap } from 'rxjs';
+
+import { OauthResponse } from '../oauth.type';
+
+const MOCK_PATH = '/assets/pharmacy/shared/mock-data';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class SsrAuthService {
+  private readonly httpSSRService = inject(HttpSSRService);
+  private readonly config = inject(ConfigFacade);
+  private basePath = '/';
+  private apiSec = '';
+  private b2bTransferApiSecret = '';
+
+  constructor() {
+    this.config.config$.pipe(takeUntilDestroyed()).subscribe((config) => {
+      this.basePath = config.environment.basePath;
+      this.apiSec = config.b2bAuthApiSecret;
+      this.b2bTransferApiSecret = config.b2bTransferApiSecret;
+    });
+  }
+
+  public getOauthToken(useTransferSecret = false): Observable<OauthResponse> {
+    const headers = this.oAuthHeaders(useTransferSecret);
+    const serviceUrl = useTransferSecret
+      ? this.basePath + '/api/oauth2/v2/token'
+      : this.basePath + '/mcapi/oauth2/v2/token';
+
+    return this.httpSSRService
+      .universalPostRequest<OauthResponse>(
+        serviceUrl,
+        CONFIG.mock,
+        {
+          headers,
+          withCredentials: true
+        },
+        this.oAuthRequestBody(),
+        {
+          maxRequestTime: 10_000
+        }
+      )
+      .pipe(
+        tap((response) => {
+          if (response.status !== 200) {
+            throw new Error('Received bad API response.');
+          }
+        }),
+        mapResponseBody()
+      );
+  }
+
+  private oAuthHeaders(useTransferSecret: boolean) {
+    const secret = useTransferSecret ? this.b2bTransferApiSecret : this.apiSec;
+
+    return new HttpHeaders({
+      'Content-Type': 'application/x-www-form-urlencoded',
+      authorization: secret
+    });
+  }
+
+  private oAuthRequestBody() {
+    /* eslint-disable-next-line @typescript-eslint/no-explicit-any --  @todo - fix any type and remove this disable.  Disabled while updating & fixing lint rules. Using 'any' as a type removes numerous benefits of typescript, makes the code less readable, difficult to debug, and harder to maintain at scale.  Please reach out if assistance is needed to avoid this. */
+    const tokenpayload: any = new URLSearchParams();
+
+    tokenpayload.set('grant_type', 'client_credentials');
+
+    return tokenpayload;
+  }
+}
+
+/* eslint-disable no-secrets/no-secrets -- Temporarily configured for QA2 until permanent approach from blocks team */
+export const CONFIG = {
+  mock: `${MOCK_PATH}/oauth2.json`
+};
+
+
+ 
