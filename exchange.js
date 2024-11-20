@@ -1,95 +1,88 @@
-Overall Comments on Goal Achievement:
 
-I am pleased to report that I have successfully accomplished the following goals throughout the year, aligning with the company's OKRs and focusing on code quality, application development process improvements, and enhancing the Valet metric:
+Here’s the updated self-assessment document with references to OKRs removed:
 
-1. SPIL2 Migration for Specialty APIs:
-I led the successful migration of specialty APIs to the new SPIL2 platform, prioritizing code quality and optimizing performance to contribute to the Valet metric enhancement. This migration ensured the efficient and secure operation of the APIs, aligning with our OKR to improve overall system reliability.
+Self-Assessment: 2024
+Overall Comments on Goal Achievement
+I am pleased to report that I have successfully accomplished several key goals this year, focusing on code quality, user experience, process improvements, and client support. These initiatives have enhanced system reliability, streamlined user flows, improved member satisfaction, and strengthened client relationships. Additionally, as a Tech Lead, I played a critical role in ensuring the team understood requirements and delivered projects effectively.
 
-2. SDK Lift and Shift:
-In executing the SDK lift and shift project, I paid careful attention to the Valet metric by optimizing the development process to reduce turnaround time for new features and bug fixes. The successful migration of 80 APIs to the cloud improved scalability and performance, resulting in an enhanced Valet metric for the organization.
+Client API Migrated Specialty Order Services to SPIL2:
+I led the migration of Specialty Order Services to SPIL2 for Client APIs, prioritizing code quality and optimizing performance. This migration improved scalability and ensured seamless operations, contributing to the reliability and efficiency of the system.
 
-3. Specialty Transfer for Client Convenience:
-By enhancing the specialty transfer feature, I focused on improving the user experience and streamlining the transfer process. This initiative positively impacted the Valet metric by reducing the time required to transfer prescriptions, contributing to increased customer satisfaction and loyalty.
+Onboarding Aetna Retail Guest Flow:
+I contributed to the successful onboarding of the Aetna Retail Guest Flow, working on retail services to ensure they met the specific needs of the Aetna retail process. This onboarding enabled Aetna to seamlessly utilize our guest flow and place retail orders using these services. The project not only enhanced the user experience for Aetna members but also ensured that their retail order requirements were fully met, further strengthening our client partnership and driving service adoption.
 
-4. Support for Welcome Season and Monitoring Activities:
-During the welcome season, I actively monitored the Valet metric and identified areas for improvement. By proactively addressing any issues, optimizing code, and providing timely resolutions, I contributed to the enhancement of the Valet metric during this critical period.
+Pharmacy Locator - Specialty Filter Enhancement:
+I implemented a Specialty Filter enhancement to the Caremark UI within the Pharmacy Locator. This improvement allowed for better usability and a more personalized user experience, addressing a key need for specialty users. Additionally, it supported filtering Mail and Retail (Specialty) pharmacies based on the member's filter search criteria, enabling members to find the most relevant pharmacy options with ease and efficiency.
 
-6. Apigee onboarding 
-In the second half of the year, I played a pivotal role in onboarding several clients to Apigee for seamless consumption of our services. This involved providing extensive support for clients to understand and utilize Apigee effectively. By ensuring a smooth onboarding process, I contributed to strengthening our client relationships and expanding our service reach.
+HyVee Transfer Prescriptions:
+I built a new application enabling members to transfer prescriptions from out-of-network pharmacies to HyVee. This application simplified the prescription transfer process, increasing convenience and improving member satisfaction.
 
-7. Code Quality Enhancement (OKR) 
-I have been dedicated to enhancing our code quality by advocating and implementing best coding practices, conducting regular code reviews, and actively participating in peer programming sessions. This proactive approach ensures that our codebase remains robust, scalable, and adherent to industry standards
+Find Pharmacy Services Migration to i90:
+I successfully migrated all Find Pharmacy services in the backend to i90 for Client APIs. This migration improved backend performance, streamlined data flow, and ensured greater scalability, contributing to enhanced service delivery.
 
-8. Prod Releases and Bug Free Code Delivery (OKR) 
- I've been pivotal in our production deployments and releases, overseeing the delivery process to guarantee bug-free code reaches production. This involves thorough testing, collaboration with cross-functional teams, and stringent quality checks to uphold our standard of delivering reliable apps to our clients.
+Managed Production Releases and Deployed Bug-Free Code:
+Throughout the year, I played a pivotal role in managing production releases across all key projects. By conducting thorough testing and implementing robust quality control measures, I consistently delivered bug-free code, ensuring reliability and client satisfaction. My proactive management of release cycles minimized downtime and maintained high operational standards.
 
-9. End to End Testing and Feature Understanding 
-As part of client support, I actively engaged in end-to-end testing, ensuring that our clients had a comprehensive understanding of the features available. This hands-on approach not only facilitated a smoother integration of our services into client systems but also improved overall client satisfaction by addressing any potential issues in a proactive manner.
+Client Support for BCBSMA, Aetna, and Molina:
+Throughout the year, I provided extensive client support for BCBSMA, Aetna, and Molina to consume client API services. This included resolving queries, addressing questions, and facilitating smooth integrations. These efforts helped strengthen client relationships, improved service adoption, and ensured that client needs were met efficiently and effectively.
 
+Team Leadership as a Tech Lead:
+As a Tech Lead, I led the team by facilitating clear communication, ensuring developers fully understood requirements in a timely manner, and providing guidance throughout the project lifecycle. I also worked to align the team’s efforts with organizational goals, maintaining high productivity and delivering projects successfully.
 
-10. Team leadership and support 
-Throughout the year, I've taken a leadership role within our development team, actively troubleshooting and resolving blockers to ensure project continuity. I've played a key part in mentoring new team members, fostering a collaborative environment, and facilitating smooth onboarding
+First Half of the Year
+Client API Migration to SPIL2:
 
-11. Knowledge Sharing and Skill Development 
-I've championed knowledge-sharing sessions, emphasizing continuous learning. These sessions, tailored especially for new team members, have not only encouraged the exchange of expertise but have significantly contributed to skill development. This aligns with our organizational goals of fostering a culture of learning and innovation.
+Successfully migrated Specialty Order Services to SPIL2.
+Ensured robust performance and scalability through optimized architecture.
+Contributed to the reliability and efficiency of the system.
+Onboarding Aetna Retail Guest Flow:
 
-Overall, Heart At Behavior 
+Collaborated with cross-functional teams to onboard the Aetna Retail Guest Flow.
+Ensured retail services met Aetna’s specific requirements.
+Enabled Aetna to seamlessly utilize the guest flow and place retail orders using these services.
+Second Half of the Year
+Pharmacy Locator - Specialty Filter Enhancement:
 
-Heart at Behaviors:
+Developed and deployed a Specialty Filter feature in the Caremark UI.
+Enhanced usability and member experience by streamlining specialty pharmacy searches.
+Supported filtering Mail and Retail (Specialty) pharmacies based on member filter search criteria.
+HyVee Transfer Prescriptions Application:
 
-1. Put People First:
-I prioritize creating a supportive and inclusive work environment, fostering open communication, and empowering team members to drive success.
+Designed and implemented a new app for members to transfer prescriptions from out-of-network pharmacies.
+Focused on simplifying the process for users, enhancing their experience, and addressing a critical user need.
+Find Pharmacy Services Migration to i90:
 
-2. Rise to Challenges:
-I embrace challenges as opportunities for growth, leveraging my technical expertise and problem-solving skills to overcome obstacles and deliver innovative solutions.
+Migrated all backend services for Find Pharmacy functionality to i90.
+Improved backend performance and scalability, supporting seamless service delivery for clients.
+Throughout the Year
+Production Release Management:
 
-3. Join Forces:
-I promote collaboration and teamwork, leveraging diverse skills and perspectives to work together towards common goals and achieve synergy.
+Effectively managed production deployments across all key projects.
+Conducted comprehensive end-to-end testing to ensure bug-free delivery.
+Collaborated with stakeholders to streamline the release process, minimizing downtime and ensuring reliability.
+Client Support for BCBSMA, Aetna, and Molina:
 
-4. Create Simplicity:
-I strive to simplify complex processes and workflows, finding efficient and streamlined solutions that enhance productivity and drive success.
+Provided comprehensive support for clients to consume API services.
+Resolved queries and ensured smooth integration of services into client systems.
+Strengthened client relationships through timely and effective communication.
+Team Leadership as a Tech Lead:
 
-5. Inspire Trust:
-Through my integrity, transparency, and accountability, I build trust among team members and stakeholders, fostering effective collaboration and achieving desired outcomes.
+Guided team members to understand project requirements effectively and on time.
+Ensured alignment of team efforts with organizational objectives.
+Supported developers in overcoming challenges and maintaining productivity throughout the development lifecycle.
+Heart at Behaviors
+Put People First:
+I maintained a people-first approach, supporting my team through active mentoring and fostering an inclusive work environment.
 
+Rise to Challenges:
+I tackled complex technical challenges, such as the seamless migration of APIs to SPIL2, ensuring minimal downtime and robust performance.
 
+Join Forces:
+Collaborated with diverse teams on cross-functional projects, particularly during the onboarding of Aetna Retail Guest Flow, achieving shared success.
 
-First Half of the Year  
-•	SPIL2 Migration for Specialty APIs:
-o	Successfully led the migration of specialty APIs to the new SPIL2 platform.
-o	Prioritized code quality and optimized performance to enhance the Valet metric.
-o	Ensured the efficient and secure operation of APIs, aligning with the OKR to improve overall system reliability.
-•	SDK Lift and Shift:
-o	Executed the SDK lift and shift project with careful attention to the Valet metric.
-o	Optimized the development process, reducing turnaround time for new features and bug fixes.
-o	Migrated 80 APIs to the cloud, improving scalability and performance, resulting in an enhanced Valet metric.
-•	Specialty Transfer for Client Convenience:
-o	Enhanced the specialty transfer feature to improve the user experience and streamline the transfer process this help client transfer the specialty drugs from non-cvs to cvs pharmacy.
-o	Positively impacted the Valet metric by reducing the time required to transfer prescriptions.
-o	Contributed to increased customer satisfaction and loyalty.
-•	Support for Welcome Season and Monitoring Activities:
-o	Actively monitored the Valet metric during the welcome season.
-o	Identified areas for improvement, optimized code, and provided timely resolutions.
-o	Contributed to the enhancement of the Valet metric during this critical period.
+Create Simplicity:
+Simplified complex workflows, such as the HyVee prescription transfer process, to enhance user convenience and satisfaction.
 
-Second Half of the Year:
-5.     Apigee Onboarding:
-o	Played a pivotal role in onboarding several clients to Apigee for seamless service consumption.
-o	Provided extensive support for clients to understand and utilize Apigee effectively.
-o	Contributed to strengthening client relationships and expanding our service reach.
-6.     Code Quality Enhancement (OKR):
-o	Dedicated efforts to enhance code quality by advocating best coding practices.
-o	Conducted regular code reviews and actively participated in peer programming sessions.
-o	Ensured our codebase remains robust, scalable, and adherent to industry standards.
-7.     Prod Releases and Bug-Free Code Delivery (OKR):
-o	Pivotal role in production deployments, overseeing the delivery process for bug-free code.
-o	Thorough testing, collaboration with cross-functional teams, and stringent quality checks.
-o	Upheld the standard of delivering reliable applications to our clients.
-8.     End-to-End Testing and Feature Understanding:
-o	Actively engaged in end-to-end testing as part of client support.
-o	Ensured clients had a comprehensive understanding of available features.
-o	Proactively addressed potential issues, improving overall client satisfaction.
-9.	 Retail Order Status, Retail Capability Implementation for BCBSMA
-o	Led the implementation of Retail Order Status and Retail Capability for BCBSMA.
-o	Collaborated effectively with partner teams, ensuring seamless integration and functionality.
+Inspire Trust:
+Through transparency and accountability, I strengthened relationships with stakeholders and ensured high-quality delivery of projects.
 
