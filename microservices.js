@@ -1,96 +1,49 @@
-public buildTransferOrderRequest(
-  currentPrescriptions: IPrescriptionDetails[]
-): TransferOrderRequest {
-  try {
-    const externalTransfer: ExternalTransfer[] =
-      currentPrescriptions.length > 0
-        ? currentPrescriptions
-            .map((member) => {
-              if (
-                member.memberType === 'primary' &&
-                member.emailAddresses.length > 0
-              ) {
-                this.cardHolderEmailAdd = member.emailAddresses[0].value || '';
-              }
+Implementation Gaurentes 
 
-              const rxDetailsArray: RxDetails[] = member.prescriptionforPatient
-                .filter((drug: any) => drug.isSelected) // Filter only selected prescriptions
-                .map((drug) => this.mapRxDetails(member, drug)) // Map each selected prescription to RxDetails
-                .filter((rxDetail): rxDetail is RxDetails => rxDetail !== null);
+Flawless welcome season and deliver implementation guarantees to all PBM Clients for Digital area.
 
-              if (rxDetailsArray.length > 0) {
-                const patient: Patient = this.mapPatientDetails(member);
+This includes collaboration with PBM IT, Digital Production support, and Core consumer trains to ensure there are no access to care issues throughout the mini and major (January) welcome seasons. Delivered multiple features 
 
-                return {
-                  requestedChannel: 'WEB',
-                  carrierId: member.carrierID,
-                  clinicalRuleDate: this.getCurrentDate(),
-                  patient,
-                  rxDetails: rxDetailsArray // Pass the array of RxDetails
-                };
-              }
+Engineeering Practices
 
-              return null;
-            })
-            .filter(
-              (transfer): transfer is ExternalTransfer => transfer !== null
-            )
-        : [];
-
-    if (externalTransfer.length === 0) {
-      throw new Error('No valid Transfer data available');
-    }
-
-    return {
-      data: {
-        idType: 'PBM_QL_PARTICIPANT_ID_TYPE',
-        profile: '',
-        externalTransfer
-      }
-    };
-  } catch (error) {
-    this.store.setStateFailure(true);
-    errorMessage('Error building transfer order request', error);
-    throw error;
-  }
-}
+Continuously improve upon Digital’s commitment and focus on quality while implementing quality re-imagine - 
 
 
-public mapRxDetails(member: any, drug: any): RxDetails | null {
-  try {
-    let fromPharmacy: Pharmacy | null = null;
 
-    // Map the prescription to a DrugDetails object
-    const drugDetails: DrugDetails[] = [{
-      drugName: drug.drugInfo?.drug?.name || '',
-      encPrescriptionLookupKey: drug.prescriptionLookupKey || '',
-      prescriptionLookupKey: this.mapPrescriptionLookupKey(member, drug),
-      provider: drug.prescriber ? this.mapProviderDetails(drug.prescriber) : null,
-      recentFillDate: drug.lastRefillDate ? this.formatDate(drug.lastRefillDate) : '',
-      daySupply: drug.daysSupply || 0,
-      quantity: drug.quantity || 0
-    }];
+Adopt I-90 capability for more pharmacy capabilities offered to clients.
 
-    // Set fromPharmacy using the pharmacyDetails from the drug
-    if (!fromPharmacy && drug.pharmacyDetails) {
-      fromPharmacy = this.mapPharmacyDetails(drug.pharmacyDetails);
-    }
 
-    // toPharmacy is set using the selectedPharmacy
-    const toPharmacy: Pharmacy = this.mapPharmacyDetails(this.selectedPharmacy);
 
-    if (drugDetails.length === 0 || !fromPharmacy || !toPharmacy) {
-      return null;
-    }
+Initiate & continue migration of Client api Pharmacy Locator services to point to i90 
 
-    return {
-      drugDetails,
-      fromPharmacy,
-      toPharmacy
-    };
-  } catch (error: unknown) {
-    this.store.setStateFailure(true);
-    errorMessage('Error in processing RxDetails', error);
-    throw error;
-  }
-}
+Learning & Development 
+
+Leverage the learning opportunities offered
+
+
+
+Utilize the CLA training opportunities for the train team
+
+Performance Guarantees
+
+Zero Performance Guarantee Misses on Digital assets for all PBM Clients. This includes uptime, availability, error rate and mean time to recover for any issues that may arise.
+
+
+Sustainability
+
+Zero net new security vulnerabilities
+
+
+
+Ensure Test Coverage for all code additions >=40%
+
+
+
+Set up alerts and monitoring to identify issues prior to client identifying them, for new features enabled for the clients
+
+
+Velocity
+
+Time to Deploy - Improve time to deploy from code commit to available for customer in less than a week
+
+
