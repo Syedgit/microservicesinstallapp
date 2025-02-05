@@ -7,16 +7,16 @@ import { PlPharmacyDetailActions } from './pl-pharmacy-detail.actions';
 export class PlPharmacyDetailEffects {
   private readonly actions$ = inject(Actions);
 
-  // Effect to log when a pharmacy is selected
-  logSelectedPharmacy$ = createEffect(
+  // Effect to store selected pharmacy in session storage
+  storeSelectedPharmacy$ = createEffect(
     () =>
       this.actions$.pipe(
         ofType(PlPharmacyDetailActions.setSelectedPharmacy),
         tap(({ pharmacy }) => {
-          console.log('🟢 Effect Triggered: Pharmacy Selected', pharmacy);
+          sessionStorage.setItem('selectedPharmacy', JSON.stringify(pharmacy)); // Store in session storage
         })
       ),
-    { dispatch: false } // No need to dispatch a new action, just logging
+    { dispatch: false }
   );
 
   // Effect to clear pharmacy details when leaving the page
@@ -25,7 +25,7 @@ export class PlPharmacyDetailEffects {
       this.actions$.pipe(
         ofType(PlPharmacyDetailActions.clearSelectedPharmacy),
         tap(() => {
-          console.log('🔴 Effect Triggered: Pharmacy Cleared');
+          sessionStorage.removeItem('selectedPharmacy'); // Remove from session storage
         })
       ),
     { dispatch: false }
