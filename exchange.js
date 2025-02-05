@@ -1,34 +1,33 @@
 import { Injectable, inject } from '@angular/core';
-import { select, Store } from '@ngrx/store';
-import { Observable } from 'rxjs';
-
-import { PharmacyDetail } from '../pl-pharmacy-detail.types';
-
+import { Actions, createEffect, ofType } from '@ngrx/effects';
+import { tap } from 'rxjs/operators';
 import { PlPharmacyDetailActions } from './pl-pharmacy-detail.actions';
-import { PlPharmacyDetailFeature } from './pl-pharmacy-detail.reducer';
 
-@Injectable({ providedIn: 'root' })
-export class PlPharmacyDetailFacade {
-  protected readonly store = inject(Store);
+@Injectable()
+export class PlPharmacyDetailEffects {
+  private readonly actions$ = inject(Actions);
 
-  public readonly selectedPharmacy$: Observable<PharmacyDetail | null> =
-    this.store.pipe(select(PlPharmacyDetailFeature.selectSelectedPharmacy));
-
-  public readonly loading$ = this.store.select(
-    PlPharmacyDetailFeature.selectLoading
+  // Effect to log when a pharmacy is selected
+  logSelectedPharmacy$ = createEffect(
+    () =>
+      this.actions$.pipe(
+        ofType(PlPharmacyDetailActions.setSelectedPharmacy),
+        tap(({ pharmacy }) => {
+          console.log('🟢 Effect Triggered: Pharmacy Selected', pharmacy);
+        })
+      ),
+    { dispatch: false } // No need to dispatch a new action, just logging
   );
 
-  public readonly error$ = this.store.select(
-    PlPharmacyDetailFeature.selectError
+  // Effect to clear pharmacy details when leaving the page
+  clearPharmacyOnLeave$ = createEffect(
+    () =>
+      this.actions$.pipe(
+        ofType(PlPharmacyDetailActions.clearSelectedPharmacy),
+        tap(() => {
+          console.log('🔴 Effect Triggered: Pharmacy Cleared');
+        })
+      ),
+    { dispatch: false }
   );
-
-  public setSelectedPharmacy(pharmacy: PharmacyDetail): void {
-    this.store.dispatch(
-      PlPharmacyDetailActions.setSelectedPharmacy({ pharmacy })
-    );
-  }
-
-  clearSelectedPharmacy(): void {
-    this.store.dispatch(PlPharmacyDetailActions.clearSelectedPharmacy());
-  }
 }
