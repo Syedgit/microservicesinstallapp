@@ -1,323 +1,136 @@
-import { isPlatformBrowser } from '@angular/common';
-import {
-  Directive,
-  ElementRef,
-  Input,
-  Renderer2,
-  inject,
-  AfterViewInit,
-  PLATFORM_ID,
-  OnChanges,
-  DestroyRef,
-  OnInit
-} from '@angular/core';
-import { ConfigFacade } from '@digital-blocks/angular/core/store/config';
-import { Loader } from '@googlemaps/js-api-loader';
-import { firstValueFrom, take } from 'rxjs';
+search html
 
-import {
-  createDriverIconWithAttributes,
-  driverOptionsExist,
-  setupDriverMarkerPostition
-} from './maps.directive.config';
-import { GoogleMapOptions, GoogleMapOptionsCenter } from './maps.interfaces';
+<div class="search-pharmacy-container">
+  <div class="search-filters">
+    <h2>Find a Pharmacy</h2>
+    <input
+      type="text"
+      placeholder="Enter ZIP Code or Address"
+      [(ngModel)]="searchQuery"
+      (input)="onSearchChange()"
+    />
+  </div>
 
-@Directive({
-  // eslint-disable-next-line @angular-eslint/directive-selector -- not sure why this is erroring out here but not in the other file
-  selector: '[utilGoogleMaps]'
+  <div class="search-results">
+    <div
+      class="pharmacy-card"
+      *ngFor="let pharmacy of pharmacies$ | async"
+      (click)="viewPharmacyDetail(pharmacy)"
+    >
+      <h3>{{ pharmacy.pharmacyName }}</h3>
+      <p>{{ pharmacy.addresses.line[0] }}, {{ pharmacy.addresses.city }}</p>
+    </div>
+  </div>
+
+  <!-- Reusable Google Map Directive -->
+  <div
+    utilGoogleMaps
+    [options]="mapOptions"
+    [mapHeight]="'400px'"
+  ></div>
+</div>
+
+
+import { Component, OnInit } from '@angular/core';
+import { Observable } from 'rxjs';
+import {
+  Pharmacy,
+  SearchPharmacyFacade
+} from '@digital-blocks/angular/pharmacy/pharmacy-locator/store/search-pharmacy';
+import { PlPharmacyDetailFacade } from '@digital-blocks/angular/pharmacy/pharmacy-locator/store/pl-pharmacy-detail';
+
+@Component({
+  selector: 'app-search-pharmacy',
+  templateUrl: './search-pharmacy.component.html',
+  styleUrls: ['./search-pharmacy.component.scss']
 })
-export class GoogleMapsDirective implements AfterViewInit, OnChanges, OnInit {
-  @Input() options!: GoogleMapOptions | null;
-  @Input() driverOptionsInput!: GoogleMapOptions | null;
-  @Input() delivered!: boolean | null;
-  @Input() mapHeight = '18.75rem';
+export class SearchPharmacyComponent implements OnInit {
+  pharmacies$: Observable<Pharmacy[]> = this.searchFacade.pharmacies$;
+  searchQuery: string = '';
+  mapOptions: any;
 
-  config = inject(ConfigFacade);
-  destroyRef = inject(DestroyRef);
-  elementRef = inject(ElementRef);
-  platformId = inject(PLATFORM_ID);
-  renderer = inject(Renderer2);
+  constructor(
+    private searchFacade: SearchPharmacyFacade,
+    private pharmacyDetailFacade: PlPharmacyDetailFacade
+  ) {}
 
-  driverIcon!: HTMLElement;
-  heartIcon!: HTMLElement;
-
-  apiKey!: string;
-  driverOptions!: GoogleMapOptions;
-  driverMarker!: google.maps.marker.AdvancedMarkerElement;
-  deliveryLocationMarker!: google.maps.marker.AdvancedMarkerElement;
-
-  dynamicMap!: google.maps.Map;
-  markers: GoogleMapOptionsCenter[] = [];
-
-  async ngOnInit() {
-    /** map will load on initialization */
-    if (typeof window !== 'undefined') {
-      this.apiKey = await firstValueFrom(this.config.googleMapsAPIKey$);
-
-      const loader = new Loader({
-        apiKey: this.apiKey,
-        version: 'weekly'
-      });
-      const googleMaps = await loader.importLibrary('maps');
-
-      this.dynamicMap = new googleMaps.Map(this.elementRef.nativeElement, {
-        mapId: 'CVS-MAP'
-      });
-    }
-  }
-
-  ngOnChanges(): void {
-    if (this.delivered === false) {
-      if (this.driverMarker) this.driverMarker.remove();
-      if (this.dynamicMap) {
-        this.dynamicMap.setOptions({
-          ...this.options
-        });
-      } else {
-        this.createMap();
-      }
-      const bounds = new google.maps.LatLngBounds();
-
-      if (this.options?.center) {
-        bounds.extend(this.options.center);
-        this.dynamicMap.fitBounds(bounds);
-      }
-    } else {
-      let driverOptionsAvailable =
-        !!this.driverOptionsInput?.center?.lat &&
-        !!this.driverOptionsInput?.center?.lng;
-
-      if (driverOptionsAvailable) {
-        this.driverOptions = this
-          .driverOptionsInput as unknown as GoogleMapOptions;
-      }
-
-      if (
-        driverOptionsAvailable &&
-        this.options?.center.lat === this.driverOptions.center.lat &&
-        this.options?.center.lng === this.driverOptions.center.lng
-      ) {
-        driverOptionsAvailable = false;
-      }
-
-      this.createMap({ driver: driverOptionsAvailable });
-      this.markers = [];
-    }
-  }
-
-  async ngAfterViewInit() {
-    this.renderer.setStyle(
-      this.elementRef.nativeElement,
-      'height',
-      this.mapHeight
-    );
-    this.heartIcon = this.renderer.createElement('img');
-    this.generateMapIcon(
-      '/blocks/store-locator/cvs.png',
-      this.heartIcon,
-      'cvs-heart-image'
-    );
-
-    if (isPlatformBrowser(this.platformId)) {
-      this.apiKey = await firstValueFrom(this.config.googleMapsAPIKey$);
-      this.createMap();
-    }
-  }
-
-  private generateMapIcon(path: string, icon: Element, alt = 'cvs-icon'): void {
-    this.config.assetsBasePath$.pipe(take(1)).subscribe((domain) => {
-      const logoPath = `${domain}${path}`;
-
-      this.renderer.setAttribute(icon, 'src', logoPath);
-      this.renderer.setAttribute(icon, 'alt', alt);
-      this.renderer.setAttribute(icon, 'height', '40px');
-      this.renderer.setAttribute(icon, 'width', '40px');
+  ngOnInit(): void {
+    this.searchFacade.loadPharmacies();
+    this.pharmacies$.subscribe((pharmacies) => {
+      this.updateMapPins(pharmacies);
     });
   }
 
-  private handleTheMap(googleMaps: google.maps.MapsLibrary): void {
-    if (this.dynamicMap) {
-      this.dynamicMap.setOptions({
-        ...this.options
-      });
-    } else {
-      this.dynamicMap = new googleMaps.Map(this.elementRef.nativeElement, {
-        zoom: 18,
-        ...this.options,
-        mapId: 'CVS-MAP'
-      });
-    }
+  onSearchChange(): void {
+    this.searchFacade.searchPharmacies(this.searchQuery);
   }
 
-  private handleDeliveryLocationMarker(
-    AdvancedMarkerElement: typeof google.maps.marker.AdvancedMarkerElement
-  ): void {
-    if (this.deliveryLocationMarker) {
-      this.deliveryLocationMarker.position = new google.maps.LatLng(
-        this.options?.center?.lat ?? Number.NaN,
-        this.options?.center?.lng ?? Number.NaN
-      );
-    } else {
-      this.deliveryLocationMarker = new AdvancedMarkerElement({
-        map: this.dynamicMap,
-        position: this.options?.center ?? { lat: Number.NaN, lng: Number.NaN },
-        content: this.heartIcon
-      });
-    }
+  viewPharmacyDetail(pharmacy: Pharmacy): void {
+    this.pharmacyDetailFacade.setSelectedPharmacy(pharmacy);
   }
 
-  public async createMap(mapOptions?: { driver: boolean }): Promise<void> {
-    if (
-      typeof window !== 'undefined' &&
-      this.options &&
-      !Number.isNaN(this.options?.center?.lat) &&
-      this.apiKey
-    ) {
-      const loader = new Loader({
-        apiKey: this.apiKey,
-        version: 'weekly'
-      });
-      const googleMaps = await loader.importLibrary('maps');
-      const { AdvancedMarkerElement } = await loader.importLibrary('marker');
+  updateMapPins(pharmacies: Pharmacy[]): void {
+    const markers = pharmacies.map((pharmacy) => ({
+      lat: pharmacy.latitude,
+      lng: pharmacy.longitude
+    }));
 
-      this.handleTheMap(googleMaps);
-      this.handleDeliveryLocationMarker(AdvancedMarkerElement);
+    this.mapOptions = {
+      center: markers[0] || { lat: 0, lng: 0 },
+      zoom: 12,
+      markers
+    };
+  }
+}
 
-      this.markers.push(this.options.center);
 
-      const bounds = new google.maps.LatLngBounds();
+pharmacy detail 
 
-      this.resetMapBasedOnBounds(
-        mapOptions,
-        AdvancedMarkerElement,
-        bounds,
-        this.options,
-        googleMaps
-      );
+<div class="pharmacy-detail-container">
+  <div class="pharmacy-info">
+    <h2>{{ selectedPharmacy?.pharmacyName }}</h2>
+    <p>{{ selectedPharmacy?.addresses.line[0] }}</p>
+    <p>{{ selectedPharmacy?.addresses.city }}, {{ selectedPharmacy?.addresses.state }}</p>
+    <p>Phone: {{ selectedPharmacy?.addresses.phoneNumber }}</p>
+  </div>
 
-      if (this.markers.length > 1) {
-        const directionsService = new google.maps.DirectionsService();
-        const directionsRenderer = new google.maps.DirectionsRenderer();
+  <!-- Map with pushpin for selected pharmacy -->
+  <div
+    utilGoogleMaps
+    [options]="mapOptions"
+    [mapHeight]="'400px'"
+  ></div>
+</div>
 
-        if (directionsService && directionsRenderer)
-          this.handleDirections(
-            directionsRenderer,
-            directionsService,
-            google.maps.TravelMode.DRIVING,
-            google.maps.DirectionsStatus.OK
-          );
+
+import { Component, OnInit } from '@angular/core';
+import { Observable } from 'rxjs';
+import { PlPharmacyDetailFacade } from '@digital-blocks/angular/pharmacy/pharmacy-locator/store/pl-pharmacy-detail';
+import { Pharmacy } from '@digital-blocks/angular/pharmacy/pharmacy-locator/store/pharmacy-detail';
+
+@Component({
+  selector: 'app-pharmacy-detail',
+  templateUrl: './pharmacy-detail.component.html',
+  styleUrls: ['./pharmacy-detail.component.scss']
+})
+export class PharmacyDetailComponent implements OnInit {
+  selectedPharmacy$: Observable<Pharmacy | null> =
+    this.pharmacyDetailFacade.selectedPharmacy$;
+  selectedPharmacy: Pharmacy | null = null;
+  mapOptions: any;
+
+  constructor(private pharmacyDetailFacade: PlPharmacyDetailFacade) {}
+
+  ngOnInit(): void {
+    this.selectedPharmacy$.subscribe((pharmacy) => {
+      if (pharmacy) {
+        this.selectedPharmacy = pharmacy;
+        this.mapOptions = {
+          center: { lat: pharmacy.latitude, lng: pharmacy.longitude },
+          zoom: 15,
+          markers: [{ lat: pharmacy.latitude, lng: pharmacy.longitude }]
+        };
       }
-    }
-  }
-
-  private resetMapBasedOnBounds(
-    mapOptions: { driver: boolean } | undefined,
-    AdvancedMarkerElement: typeof google.maps.marker.AdvancedMarkerElement,
-    bounds: google.maps.LatLngBounds,
-    options: GoogleMapOptions,
-    googleMaps: google.maps.MapsLibrary
-  ): void {
-    if (driverOptionsExist(mapOptions, this.dynamicMap, this.driverOptions)) {
-      this.driverIcon = this.renderer.createElement('img');
-      this.driverIcon = createDriverIconWithAttributes(
-        this.driverIcon,
-        this.renderer
-      );
-      this.driverMarker = setupDriverMarkerPostition(
-        AdvancedMarkerElement,
-        this.driverMarker,
-        this.driverOptions,
-        this.driverIcon,
-        this.dynamicMap
-      );
-
-      this.markers.push(this.driverOptions.center);
-
-      for (const marker of this.markers) {
-        bounds.extend(marker);
-      }
-
-      const calculatedZoom = this.calculateDistanceInMiles(
-        options.center.lat,
-        options.center.lng,
-        this.driverOptions.center.lat,
-        this.driverOptions.center.lng
-      );
-
-      if (calculatedZoom === 0) {
-        this.dynamicMap.fitBounds(bounds);
-      } else {
-        this.dynamicMap.fitBounds(bounds, calculatedZoom);
-      }
-    } else {
-      this.dynamicMap = new googleMaps.Map(this.elementRef.nativeElement, {
-        zoom: 18,
-        ...this.options,
-        mapId: 'CVS-MAP'
-      });
-
-      const marker = new AdvancedMarkerElement({});
-
-      marker.map = this.dynamicMap;
-      marker.position = options.center;
-      marker.content = this.heartIcon;
-    }
-  }
-
-  private handleDirections(
-    directionsRenderer: google.maps.DirectionsRenderer,
-    directionsService: google.maps.DirectionsService,
-    mode: google.maps.TravelMode,
-    status: google.maps.DirectionsStatus
-  ): void {
-    directionsRenderer.setMap(this.dynamicMap);
-    directionsService.route(
-      {
-        origin: this.markers[1],
-        destination: this.markers[0],
-        travelMode: mode
-      },
-      (result, _status) => {
-        _status === status
-          ? directionsRenderer.setDirections(result)
-          : console.warn('Directions could not be obtained at this moment.');
-      }
-    );
-  }
-
-  private calculateDistanceInMiles(
-    lat1: number,
-    lng1: number,
-    lat2: number,
-    lng2: number
-  ): number {
-    let circumference = 0;
-
-    const dLat = ((lat2 - lat1) * Math.PI) / 180;
-    const dLon = ((lng2 - lng1) * Math.PI) / 180;
-    const area =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos((lat1 * Math.PI) / 180) *
-        Math.cos((lat2 * Math.PI) / 180) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
-
-    circumference = 2 * Math.atan2(Math.sqrt(area), Math.sqrt(1 - area));
-
-    const distance = 3958.8 * circumference;
-
-    let zoom;
-
-    if (distance < 0.025) {
-      zoom = 250;
-    } else if (distance <= 0.25) {
-      zoom = 150;
-    } else if (distance <= 0.5) {
-      zoom = 125;
-    } else {
-      zoom = 0;
-    }
-
-    return zoom;
+    });
   }
 }
