@@ -214,5 +214,12 @@ export class PharmacyMapComponent implements OnInit {
   }
 }
 
+this is how it is being used in other pharmacy detail page 
 
+ <lib-pharmacy-map
+    [googleURL]="googleURL"
+    [isModal]="isModal"
+    [store$]="store$"
+    [externalMapHref]="externalMapHref"
+    (createPlatFormSpecificURL)="createPlatFormSpecificURL.emit($event)" />
 
