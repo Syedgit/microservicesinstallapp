@@ -50,6 +50,7 @@ export class PlPharmacyMapComponent implements OnInit {
     | {
         center: { lat: number; lng: number };
         zoom?: number;
+        markers?: { position: { lat: number; lng: number } }[];
       }
     | undefined;
 
@@ -57,40 +58,27 @@ export class PlPharmacyMapComponent implements OnInit {
     combineLatest([this.plPharmacySearchFacade.retailFindPharmacy$])
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(([pharmacies]) => {
-        // this.pharmacies = pharmacies;
-        // this.selectedPharmacy = selectedPharmacy;
+        this.pharmacies = pharmacies;
 
-        // if (selectedPharmacy) {
-        //   this.options = {
-        //     center: {
-        //       lat: Number(selectedPharmacy.latitude.toFixed(6)),
-        //       lng: Number(selectedPharmacy.longitude.toFixed(6))
-        //     },
-        //     zoom: 15,
-        //     markers: [
-        //       {
-        //         position: {
-        //           lat: Number(selectedPharmacy.latitude.toFixed(6)),
-        //           lng: Number(selectedPharmacy.longitude.toFixed(6))
-        //         }
-        //       }
-        //     ]
-        //   };
-        // } else if (pharmacies && pharmacies.length > 0) {
-        if (!this.options && pharmacies) {
+        if (pharmacies && pharmacies.length > 0) {
+          const markers = pharmacies.map((pharmacy) => ({
+            position: {
+              lat: Number(pharmacy.latitude.toFixed(6)),
+              lng: Number(pharmacy.longitude.toFixed(6))
+            }
+          }));
+
           this.options = {
-            center: {
-              lat: Number(pharmacies[0].latitude.toFixed(6)),
-              lng: Number(pharmacies[0].longitude.toFixed(6))
-            },
-            zoom: 12
+            center: markers[0].position, // Center on the first pharmacy
+            zoom: 12,
+            markers
           };
-        }
-        if (pharmacies && pharmacies[0]?.latitude && pharmacies[0].longitude) {
+
+          // Emit first pharmacy's location for directions
           this.createPlatFormSpecificURL.emit({
             baseURL: 'https://www.google.com/maps/search/?api=1&query=',
-            lat: pharmacies[0].latitude.toFixed(6),
-            long: pharmacies[0].longitude.toFixed(6)
+            lat: markers[0].position.lat.toFixed(6),
+            long: markers[0].position.lng.toFixed(6)
           });
         }
       });
