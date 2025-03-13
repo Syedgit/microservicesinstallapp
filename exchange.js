@@ -1,52 +1,59 @@
-import { ReportableError } from '@digital-blocks/angular/core/util/error-handler';
-import { ActionReducer, createFeature, createReducer, on } from '@ngrx/store';
 import { PlPharmacyContentSpotActions } from './pl-pharmacy-content-spot.actions';
-import { PageData } from '../pl-pharmacy-content-spot-interface';
+import { initialPlPharmacyContentSpotState, reducer } from './pl-pharmacy-content-spot.reducer';
+import { plPharmacySpotsMockResponse, error } from './mocks/pl-pharmacy-content-spot.constants.spec';
 
-export const PL_PHARMACY_CONTENT_SPOT_FEATURE_KEY = 'pl-pharmacy-content-spot';
+describe('PlPharmacyContentSpotReducer', () => {
+  
+  it('should set loading to true and store cmsSpots on getPlPharmacyContentSpots', () => {
+    const action = PlPharmacyContentSpotActions.getPlPharmacyContentSpots({
+      cmsSpots: [
+        { spotName: 'PortletIntegratedPharmacyLocatorSearchAnnouncementSpot' },
+        { spotName: 'PortletIntegratedPharmacyLocatorResultsAnnouncementSpot' }
+      ]
+    });
 
-export interface PlPharmacyContentSpotState {
-  plPharmacyContentSpots: PageData[] | null; // ✅ Storing API response directly
-  cmsSpots: { spotName: string }[]; // ✅ Keep track of requested spots
-  loading: boolean;
-  error: ReportableError | undefined;
-}
+    const expectedState = {
+      ...initialPlPharmacyContentSpotState,
+      cmsSpots: action.cmsSpots, // ✅ Store requested CMS spots
+      loading: true,
+      error: undefined
+    };
 
-export const initialPlPharmacyContentSpotState: PlPharmacyContentSpotState = {
-  plPharmacyContentSpots: null, // ✅ Default empty state
-  cmsSpots: [], // ✅ Track which spots are being requested
-  loading: false,
-  error: undefined
-};
+    expect(reducer(initialPlPharmacyContentSpotState, action)).toEqual(expectedState);
+  });
 
-export const reducer: ActionReducer<PlPharmacyContentSpotState> = createReducer(
-  initialPlPharmacyContentSpotState,
+  it('should update plPharmacyContentSpots and set loading to false on getPlPharmacyContentSpotsSuccess', () => {
+    const action = PlPharmacyContentSpotActions.getPlPharmacyContentSpotsSuccess({
+      plPharmacyContentSpots: plPharmacySpotsMockResponse // ✅ Use mock response
+    });
 
-  // ✅ Handle API request - set loading and store requested spots
-  on(PlPharmacyContentSpotActions.getPlPharmacyContentSpots, (state, { cmsSpots }) => ({
-    ...state,
-    cmsSpots, // ✅ Store requested CMS spots
-    loading: true,
-    error: undefined
-  })),
+    const expectedState = {
+      ...initialPlPharmacyContentSpotState,
+      plPharmacyContentSpots: plPharmacySpotsMockResponse, // ✅ Store response data
+      loading: false,
+      error: undefined
+    };
 
-  // ✅ Handle API success - store fetched content and reset loading state
-  on(PlPharmacyContentSpotActions.getPlPharmacyContentSpotsSuccess, (state, { plPharmacyContentSpots }) => ({
-    ...state,
-    plPharmacyContentSpots, // ✅ Store fetched spots data
-    loading: false,
-    error: undefined
-  })),
+    expect(reducer(initialPlPharmacyContentSpotState, action)).toEqual(expectedState);
+  });
 
-  // ✅ Handle API failure - keep previous state but store error
-  on(PlPharmacyContentSpotActions.getPlPharmacyContentSpotsFailure, (state, { error }) => ({
-    ...state,
-    loading: false,
-    error // ✅ Store error message
-  }))
-);
+  it('should set error and set loading to false on getPlPharmacyContentSpotsFailure', () => {
+    const action = PlPharmacyContentSpotActions.getPlPharmacyContentSpotsFailure({
+      error
+    });
 
-export const PlPharmacyContentSpotFeature = createFeature({
-  name: PL_PHARMACY_CONTENT_SPOT_FEATURE_KEY,
-  reducer
+    const expectedState = {
+      ...initialPlPharmacyContentSpotState,
+      loading: false,
+      error // ✅ Store error message
+    };
+
+    expect(reducer(initialPlPharmacyContentSpotState, action)).toEqual(expectedState);
+  });
+
+  it('should return the default state when an unknown action is dispatched', () => {
+    const action = { type: 'UNKNOWN_ACTION' } as any;
+
+    expect(reducer(initialPlPharmacyContentSpotState, action)).toEqual(initialPlPharmacyContentSpotState);
+  });
 });
