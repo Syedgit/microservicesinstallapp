@@ -1,59 +1,35 @@
-import { PlPharmacyContentSpotActions } from './pl-pharmacy-content-spot.actions';
-import { initialPlPharmacyContentSpotState, reducer } from './pl-pharmacy-content-spot.reducer';
-import { plPharmacySpotsMockResponse, error } from './mocks/pl-pharmacy-content-spot.constants.spec';
+ <lib-custom-type-ahead
+      [label]="locationSearchStaticContent.heading"
+      inputId="location-search-input"
+      [loadingMessage]="locationSearchStaticContent.loadingMessage"
+      [errorMessage]="locationSearchErrorText$ | async"
+      [suggestionList]="locationSearchFacade.locationSuggestions$ | async"
+      (search)="handleSearch($event)"
+      (suggestionSelected)="handleSuggestionSelected($event)"
+      (typeAheadBlur)="freeInputZipcodeSearch($event)"
+      (inputCleared)="onInputClear()"
+      [clearInput]="clearInput"
+      [initialInputValue]="initialValue">
+    </lib-custom-type-ahead>
 
-describe('PlPharmacyContentSpotReducer', () => {
-  
-  it('should set loading to true and store cmsSpots on getPlPharmacyContentSpots', () => {
-    const action = PlPharmacyContentSpotActions.getPlPharmacyContentSpots({
-      cmsSpots: [
-        { spotName: 'PortletIntegratedPharmacyLocatorSearchAnnouncementSpot' },
-        { spotName: 'PortletIntegratedPharmacyLocatorResultsAnnouncementSpot' }
-      ]
-    });
 
-    const expectedState = {
-      ...initialPlPharmacyContentSpotState,
-      cmsSpots: action.cmsSpots, // ✅ Store requested CMS spots
-      loading: true,
-      error: undefined
-    };
+ {
+          "name": "LocationSearch",
+          "inputs": {
+            "locationSearchStaticContent": {
+              "heading": "ZIP code or location",
+              "loadingMessage": "Searching locations",
+              "currentLocationBtnTxt": "Use my current location",
+              "searchErrorText": "Select an address from the drop down"
+            },
+            "customizedClass": "pl-search-flow"
+          }
 
-    expect(reducer(initialPlPharmacyContentSpotState, action)).toEqual(expectedState);
-  });
 
-  it('should update plPharmacyContentSpots and set loading to false on getPlPharmacyContentSpotsSuccess', () => {
-    const action = PlPharmacyContentSpotActions.getPlPharmacyContentSpotsSuccess({
-      plPharmacyContentSpots: plPharmacySpotsMockResponse // ✅ Use mock response
-    });
+search-component.ts 
 
-    const expectedState = {
-      ...initialPlPharmacyContentSpotState,
-      plPharmacyContentSpots: plPharmacySpotsMockResponse, // ✅ Store response data
-      loading: false,
-      error: undefined
-    };
-
-    expect(reducer(initialPlPharmacyContentSpotState, action)).toEqual(expectedState);
-  });
-
-  it('should set error and set loading to false on getPlPharmacyContentSpotsFailure', () => {
-    const action = PlPharmacyContentSpotActions.getPlPharmacyContentSpotsFailure({
-      error
-    });
-
-    const expectedState = {
-      ...initialPlPharmacyContentSpotState,
-      loading: false,
-      error // ✅ Store error message
-    };
-
-    expect(reducer(initialPlPharmacyContentSpotState, action)).toEqual(expectedState);
-  });
-
-  it('should return the default state when an unknown action is dispatched', () => {
-    const action = { type: 'UNKNOWN_ACTION' } as any;
-
-    expect(reducer(initialPlPharmacyContentSpotState, action)).toEqual(initialPlPharmacyContentSpotState);
-  });
-});
+  protected readonly userAnalyticsFacade = inject(UserAnalyticsFacade);
+  private readonly locationSearchFacade = inject(LocationSearchFacade);
+  public cmsResponse: cmsContent[] = [];
+  public resultsAnnouncementSpot = '';
+  public searchedAddressData: Address | undefined = undefined;
