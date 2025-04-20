@@ -36,3 +36,78 @@
     }
   </div>
 }
+
+config as page dedinations :
+
+
+{
+  "identifiers": {
+    "platform": "web",
+    "tenant": "caremark",
+    "path": "/pharmacy/benefits/pharmacy-locator/search"
+  },
+  "payload": {
+    "page": {
+      "header": {
+        "name": "CaremarkHeader"
+      },
+      "main": [
+        {
+          "name": "PlHeading",
+          "inputs": {
+            "headerText": "Find an in-network pharmacy",
+            "breadcrumbMenuList": [
+              {
+                "pageName": "Home",
+                "externalPath": "/memberportal/cmkdashboard"
+              },
+              {
+                "pageName": "Find an in-network pharmacy",
+                "pagePath": "pharmacy/benefits/pharmacy-locator/search"
+              }
+            ],
+            "hideBreadcrumbForMweb": true
+          }
+        },
+        {
+          "name": "LocationSearch",
+          "inputs": {
+            "locationSearchStaticContent": {
+              "heading": "ZIP code or location",
+              "loadingMessage": "Searching locations",
+              "currentLocationBtnTxt": "Use my current location",
+              "searchErrorText": "Select an address from the drop down"
+            },
+            "customizedClass": "pl-search-flow"
+          }
+        },
+        {
+          "name": "PlPharmacyMap",
+          "inputs": {
+            "staticContent": {}
+          }
+        },
+        {
+          "name": "PlDisclaimers",
+          "inputs": {}
+        }
+      ],
+      "footer": {
+        "name": "CaremarkFooter"
+      },
+      "metadata": {
+        "title": "CVS Caremark - Pharmacy Locator search",
+        "tealium": {
+          "pageCategory": "plan_and_benefits",
+          "pageIdentifier": "plan_and_benefits:pl"
+        },
+        "styles": {
+          "margin": false
+        },
+        "publish": true,
+        "authenticated": true
+      }
+    }
+  }
+}
+
