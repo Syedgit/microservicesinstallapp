@@ -18,3 +18,19 @@
             Filter ({{ selectedFiltersCount }})
           </ps-chip>
         </div>
+
+
+<util-conditional-modal
+    [showAsModal]="true"
+    [heading]="staticContent.searchFilterHeading"
+    [hasCloseButton]="false"
+    size="lg">
+    <lib-pl-select-filter
+      (closeFilterModal)="toggleModal($event)"
+      [selectedSearchFiltersValue]="searchFiltersValue"
+      [plPznInfo]="plPharmacySearchStore.plPznData$ | async"
+      [memberPlanBenefitData]="memberPlanBenefitData"
+      [memberPlanDetailsPrefPharmInd]="
+        memberPlanDetailsPrefPharmInd
+      "></lib-pl-select-filter>
+  </util-conditional-modal>
