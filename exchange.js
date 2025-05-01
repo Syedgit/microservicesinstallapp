@@ -1,12 +1,42 @@
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+ public loadPharmacyDetail(
+    clickedPharmacyIndex: number,
+    pharmacyData: IFormattedPharmaciesResponse
+  ): void {
+    this.pharmacyDetailIndex = clickedPharmacyIndex;
+    this.plPharmacySearchStore.setSelectedPharmacy(
+      pharmacyData as PharmacyDetail
+    );
+    this.navigationService.navigate(
+      '/pharmacy/benefits/pharmacy-locator/pharmacy-details',
+      { queryParamsHandling: 'preserve' },
+      {
+        navigateByPath: true
+      }
+    );
+    this.plPharmacySearchStore.resetStateOnInputClear();
+    if (pharmacyData.pharmacyLob == 'M' || pharmacyData.pharmacyLob == 'S') {
+      this.plPharmacySearchStore.linkEvent(
+        AdobeTaggingConstants.onClick_mail_details_link
+      );
+    } else if (pharmacyData.pharmacyLob == 'R')
+      this.plPharmacySearchStore.linkEvent(
+        AdobeTaggingConstants.onClick_retail_details_link
+      );
+  }
 
 
-wget -qO- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+this is html 
 
-nano ~/.zshrc
-
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-
-command -v nvm
-
+<div
+                          class="retail-pharmacy-detail-link-block pharmacy-detail-link-block">
+                          <ps-link
+                            class="pharmacy-details-link"
+                            link-href="javascript:void(0)"
+                            (click)="loadPharmacyDetail(i, pharmacyData)"
+                            (keyPress)="loadPharmacyDetail(i, pharmacyData)"
+                            variant="standalone"
+                            subtype="default"
+                            weight="strong"
+                            >Pharmacy details</ps-link
+                          >
+                        </div>
