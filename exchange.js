@@ -126,3 +126,13 @@
     }
 
 
+  const headers: any = {
+                "content-type": "application/json",
+                "x-grid": args.refId ? args.refId.substring(0, 32) : '',
+                "x-consumername": args.appName ? args.appName : '',
+                "x-customappname": args.appName ? args.appName : '',
+                "x-memberToken": args.tokenId ? args.tokenId : '',
+                "x-api-key": (process && process.env) ? process.env.I90_API_KEY : '',
+                "x-clientrefid": args.refId.substring(0, 32)
+            };
+
