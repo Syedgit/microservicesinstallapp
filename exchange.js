@@ -84,4 +84,43 @@ new backend i90 response
 }
 
 
+   core(args: SetPrimaryPharmacyParam, requestMethod: Interface.Core.RequestMethod, _dependencies: any): Promise<any> {
+        let requestBody = {
+            "setPrimaryPharmacyRequest": {
+                "Request": {
+                    "primaryPharmacyPresent": args.primaryPharmacyPresent,
+                    "participantID": args.memberInfo.internalID,
+                    "pharmNabpId": args.pharmacyNumber,
+                    "pharmName": args.pharmacyName,
+                    "pharmAdrTx": args.pharmacyAddress,
+                    "pharmCityTx": args.pharmacyCity,
+                    "pharmStateCd": args.pharmacyState,
+                    "pharmZipCd": args.pharmacyZipCode,
+                    "pharmPhone": args.pharmacyPhone
+                },
+                "memberInfo": args.memberInfo
+            }
+        };
+        return requestMethod.http.makeRequest({
+            url: {
+                name: 'dbpl_setPrimaryPharmacy',
+                params: {
+                    "version": "1.0",
+                    "appName": args.appName,
+                    "refId": args.refId
+                }
+            },
+            body: requestBody,
+            handler: this.Handler
+        });
+    }
+
+    after(_args: SetPrimaryPharmacyParam, _data: any, header: Interface.Response.AfterHeader): Promise<Interface.Response.AfterResponse<Interface.Response.AfterHeader>> {
+        return Promise.resolve({
+            get: function () {
+                return header;
+            }
+        });
+    }
+
 
