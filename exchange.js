@@ -1,4 +1,4 @@
-client request 
+1. client request 
 
 {
     "setPrimaryPharmacyRequest": {
@@ -33,7 +33,7 @@ client request
     }
 }
 
-client response 
+2. client response 
 
 {
     "setprimarypharmacymultiplanResponse": {
@@ -45,7 +45,7 @@ client response
     }
 }
 
-new backend i90 request 
+3. new backend i90 request 
 
 {
     "id": "632991602",
@@ -59,7 +59,7 @@ new backend i90 request
     "phone": "972-479-9799"
 }
 
-new backend i90 response 
+4. new backend i90 response 
 
 {
     "statusCode": "0000",
@@ -83,7 +83,7 @@ new backend i90 response
     ]
 }
 
-
+5. core will build the request this needs to be updated with new i90 request 
    core(args: SetPrimaryPharmacyParam, requestMethod: Interface.Core.RequestMethod, _dependencies: any): Promise<any> {
         let requestBody = {
             "setPrimaryPharmacyRequest": {
@@ -115,6 +115,8 @@ new backend i90 response
         });
     }
 
+6. after will build the response and return the what client is expecting refId we can take it from the request.
+        
     after(_args: SetPrimaryPharmacyParam, _data: any, header: Interface.Response.AfterHeader): Promise<Interface.Response.AfterResponse<Interface.Response.AfterHeader>> {
         return Promise.resolve({
             get: function () {
