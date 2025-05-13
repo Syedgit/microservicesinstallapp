@@ -1,58 +1,43 @@
-Type 'Promise<{ get: () => { setprimarypharmacymultiplanResponse: { header: { statusCode: any; statusDesc: any; refID: any; }; }; }; }>' is not assignable to type 'Promise<AfterResponse<AfterHeader>>'.
-  Type '{ get: () => { setprimarypharmacymultiplanResponse: { header: { statusCode: any; statusDesc: any; refID: any; }; }; }; }' is not assignable to type 'AfterResponse<AfterHeader>'.
-    The types returned by 'get()' are incompatible between these types.
-      Type '{ setprimarypharmacymultiplanResponse: { header: { statusCode: any; statusDesc: any; refID: any; }; }; }' is missing the following properties from type 'AfterHeader': statusCode, statusDesc, refId, planId, and 2 more
+import { STATUS_SUCCESS, STATUS_FAILURE } from './constants';
 
-after 
+after(
+  args: SetPrimaryPharmacyClientRequest,
+  data: any,
+  _header: any
+): Promise<{ get: () => Interface.Response.AfterHeader; formattedResponse: any }> {
+  const statusCode = data?.statusCode || STATUS_FAILURE;
+  const statusDesc = data?.statusDesc || "Failure";
+  const refID = args.setPrimaryPharmacyRequest?.header?.serviceContext?.refID || "";
 
-after(args: SetPrimaryPharmacyParamI90, data: any, _header: Interface.Response.AfterHeader): Promise<Interface.Response.AfterResponse<Interface.Response.AfterHeader>> {
-        const statusCode = data?.statusCode || STATUS_FAILURE;
-        const statusDesc = data?.statusDesc || "Failure";
-        const refID = args.SetPrimaryPharmacyParamI90?.header?.serviceContext?.refID || "";
-      
-        const response = {
-          setprimarypharmacymultiplanResponse: {
-            header: {
-              statusCode,
-              statusDesc,
-              refID
-            }
-          }
-        };
-      
-        // Optional logging
-        this.Helper?.Logger?.info?.({
-          method: 'setPrimaryPharmacy:after',
-          backendResponse: data,
-          clientResponse: response
-        });
-      
-        return Promise.resolve({
-          get: () => response
-        });
+  // Required AfterHeader structure
+  const header: Interface.Response.AfterHeader = {
+    statusCode,
+    statusDesc,
+    refId: refID,
+    planId: '',           // If not relevant, keep blank or populate from args if available
+    operationName: 'setPrimaryPharmacy',
+    xhrTrace: {} as Interface.Response.XhrProbe // return an empty object or construct if available
+  };
+
+  const clientResponse = {
+    setprimarypharmacymultiplanResponse: {
+      header: {
+        statusCode,
+        statusDesc,
+        refID
       }
-
-
-  namespace Response {
-        export import Header = response.Header;
-        export import PlanStatus = response.PlanStatus;
-        export import AfterPlanStatus = response.AfterPlanStatus;
-        export import AfterHeader = response.AfterHeader;
-        export import MemberPlanMapping = response.MemberPlanMapping;
-        export import AfterResponse = response.AfterResponse;
-        export import ConsolidatedResponse = response.ConsolidatedResponse;
-        export import XhrProbe = response.XhrProbe;
     }
+  };
 
-export interface AfterResponse<T> {
-    get(): T;
-}
+  // Optional logging
+  this.Helper?.Logger?.info?.({
+    method: 'setPrimaryPharmacy:after',
+    backendResponse: data,
+    clientResponse
+  });
 
-export interface AfterHeader {
-    statusCode: string;
-    statusDesc: string;
-    refId: string;
-    planId: string;
-    operationName: string;
-    xhrTrace: XhrProbe;
+  return Promise.resolve({
+    get: () => header,
+    formattedResponse: clientResponse // custom field if you want to return to controller
+  });
 }
