@@ -16,3 +16,12 @@ url: 'https://internal-pt.pt1.digital-pbm-rx-pt.cvshealth.com/microservices/rxpb
         encryptText += cipher.final('hex');
         return encryptText;
     }
+
+
+encryptWithCipher(buffer, cipherKey) {
+    const iv = Buffer.alloc(16, 0); // 16 bytes of zero
+    const cipher = crypto.createCipheriv('aes-128-cbc', Buffer.from(cipherKey, 'utf8'), iv);
+    let encryptText = cipher.update(buffer, 'utf8', 'hex');
+    encryptText += cipher.final('hex');
+    return encryptText;
+}
