@@ -1,26 +1,25 @@
-after(
-  _args: SetPrimaryPharmacyParamI90,
-  data: any,
-  header: Interface.Response.AfterHeader
-): Promise<Interface.Response.AfterResponse<Interface.Response.AfterHeader>> {
-    // Wrap the backend response to match what the framework expects
-    const response = {
-        setprimarypharmacymultiplanResponse: {
-            header: {
-                statusCode: data?.statusCode || "9999",
-                statusDesc: data?.statusDesc || "Failure",
-                refId: header.refId,
-                planId: header.planId,
-                operationName: header.operationName,
-                xhrTrace: header.xhrTrace
+return requestMethod.http.makeRequest({
+            url: {
+                name: 'experience_getDeliveryDateRange_pbm',
+                params: {}
             },
-            ...data // preserve backend data
-        }
-    };
-
-    return Promise.resolve({
-        get: function () {
-            return response.setprimarypharmacymultiplanResponse;
-        }
-    });
-}
+            headers: customHeaders,
+            body: requestBody,
+            handler: this.Handler,
+            processResponse: async (response: any): Promise<Interface.Core.ProcessResponse> => {
+                // if (response.data && response.data.getAccountBalance && response.data.getOrderShippingDetails 
+                //      && response.data.getPbmPaymentDetails) {
+                const infoLog = {
+                    statusCode: response.statusCode,
+                    statusDescription: response.statusDescription,
+                    data: response.data ? 'FOUND' : 'NOTFOUND'
+                };
+                this.Helper.Logger.info(infoLog);
+                if (response && response.data) {
+                    return response;
+                } else {
+                    this.Helper.Logger.error("Invalid response from getDeliveryDateRange experience API");
+                    throw response;
+                }
+            }
+        });
