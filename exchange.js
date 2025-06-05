@@ -37,4 +37,24 @@ message =
 stack =
 'RangeError: Invalid key length
 
+
+          public encryptWithCipher(buffer: any, cipherKey?: any): any {
+    // Ensure key is exactly 16 bytes
+    let keyBuffer = Buffer.from(cipherKey, 'utf8');
+    if (keyBuffer.length < 16) {
+        // Pad with zeros if too short
+        keyBuffer = Buffer.concat([keyBuffer, Buffer.alloc(16 - keyBuffer.length, 0)]);
+    } else if (keyBuffer.length > 16) {
+        // Truncate if too long
+        keyBuffer = keyBuffer.slice(0, 16);
+    }
+
+    const iv = Buffer.alloc(16, 0); // 16 bytes of zeros
+
+    const cipher = crypto.createCipheriv('aes-128-cbc', keyBuffer, iv);
+    let encryptText = cipher.update(buffer, 'utf8', 'hex');
+    encryptText += cipher.final('hex');
+    return encryptText;
+}
+
           
