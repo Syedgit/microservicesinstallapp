@@ -1,46 +1,33 @@
-pbmBase.interface.ts
-
-SET_PRIMARY_PHARMACY = '/pharmacy/setPrimaryPharmacyMultiPlanI90',
-
-  Set Primary Handler 
-
 import * as Express from 'express';
 import { PBMBaseController } from '../../common/PBMBase.Controller';
 import { PBM } from '../../../../interface/PBMBase.interface';
+import { Interface } from "@cvsdigital_caremark/core-sdk-lib/dist/src/ts/interface/index";
 
 export class SetPrimaryPharmacyHandler extends PBMBaseController {
 
-    public static process(request: Express.Request,
+    public static process(
+        request: Express.Request,
         response: Express.Response,
-        next: Express.NextFunction) {
+        next: Express.NextFunction
+    ) {
         super.process(request, response, next, new SetPrimaryPharmacyHandler(
             PBM.SET_PRIMARY_PHARMACY
         ));
     }
 
-}
-
-
-legacy response 
-
-{
-    "setprimarypharmacymultiplanResponse": {
-        "header": {
-            "statusCode": "0000",
-            "statusDesc": "Success",
-            "refID": "4857a0f56e51403daf1750109aa9a3d0"
+    // 🛠️ Override after() to remap the response key
+    public after(
+        _args: any,
+        data: any,
+        header: Interface.Response.AfterHeader
+    ): Promise<Interface.Response.AfterResponse<Interface.Response.AfterHeader>> {
+        if (data?.setprimarypharmacymultiplani90Response) {
+            data.setprimarypharmacymultiplanResponse = data.setprimarypharmacymultiplani90Response;
+            delete data.setprimarypharmacymultiplani90Response;
         }
-    }
-}
 
-new response after i90 
-
-{
-    "setprimarypharmacymultiplani90Response": {
-        "header": {
-            "statusCode": "0000",
-            "statusDesc": "Success",
-            "refID": "4857a0f56e51403daf1750109aa9a3d0"
-        }
+        return Promise.resolve({
+            get: () => data
+        });
     }
 }
