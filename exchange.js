@@ -91,3 +91,11 @@ Simplified complex workflows, such as the HyVee prescription transfer process, t
 
 Inspire Trust:
 Through transparency and accountability, I strengthened relationships with stakeholders and ensured high-quality delivery of projects.
+
+
+  Deliver integrated value across our enterprise assets
+
+Engage patients and consumers through personalized experiences
+
+
+Transform business operations with tech-enabled capabilities
