@@ -10,7 +10,7 @@ on stripHTML(theHTML)
 	return stripped as string
 end stripHTML
 
--- Collect note titles and bodies
+-- Get notes from Apple Notes
 tell application "Notes"
 	set notesList to every note
 	set allCleanNotes to {}
@@ -21,20 +21,22 @@ tell application "Notes"
 	end repeat
 end tell
 
--- Export each note as clean text
+-- Write to clean text files
 repeat with itemData in allCleanNotes
 	set noteName to item 1 of itemData
 	set noteBody to item 2 of itemData
 	set cleanText to stripHTML(noteBody)
 	
+	-- Clean filename
 	set safeName to do shell script "echo " & quoted form of noteName & " | tr -cd '[:alnum:]_-'"
+	
+	-- Build file path
 	set folderPath to (POSIX path of (path to desktop)) & "ExportedNotesClean/"
 	set filePath to folderPath & safeName & ".txt"
-	
 	do shell script "mkdir -p " & quoted form of folderPath
 	
-	-- Coerce file path properly here
-	set fileRef to open for access (POSIX file filePath as alias) with write permission
+	-- Use POSIX file only, NOT alias
+	set fileRef to open for access (POSIX file filePath) with write permission
 	set eof of fileRef to 0
 	write cleanText to fileRef as «class utf8»
 	close access fileRef
