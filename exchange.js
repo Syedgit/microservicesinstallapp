@@ -1,4 +1,5 @@
 use framework "Foundation"
+use scripting additions
 
 on stripHTML(theHTML)
 	set theNSString to current application's NSString's stringWithString:theHTML
