@@ -1,21 +1,16 @@
-osascript -e '
 tell application "Notes"
 	set notesList to every note
 	repeat with n in notesList
 		set noteName to the name of n
-		set noteText to the body of n
-		set filePath to (POSIX path of (path to desktop)) & noteName & ".txt"
-		do shell script "echo " & quoted form of noteText & " > " & quoted form of filePath
-	end repeat
-end tell'
-
-
-
-osascript <<EOF
-tell application "Notes"
-	set noteList to every note
-	repeat with n in noteList
-		display dialog name of n
+		set noteBody to the body of n
+		
+		-- Clean filename to remove special characters
+		set safeName to do shell script "echo " & quoted form of noteName & " | tr -cd '[:alnum:]_-'" 
+		
+		-- Set export path to Desktop
+		set filePath to (POSIX path of (path to desktop)) & "ExportedNotes/" & safeName & ".txt"
+		
+		-- Create folder and write the note body to the file
+		do shell script "mkdir -p ~/Desktop/ExportedNotes && echo " & quoted form of noteBody & " > " & quoted form of filePath
 	end repeat
 end tell
-EOF
