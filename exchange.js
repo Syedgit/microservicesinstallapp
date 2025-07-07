@@ -3,14 +3,14 @@ use scripting additions
 
 on stripHTML(theHTML)
 	set theNSString to current application's NSString's stringWithString:theHTML
+	set regexPattern to "<[^>]+>"
 	set options to current application's NSRegularExpressionSearch
 	set range to {location:0, |length|:theNSString's |length|()}
-	set regexPattern to "<[^>]+>"
-	set stripped to theNSString's stringByReplacingOccurrencesOfString:regexPattern withString:"" options:options range:range
-	return stripped as string
+	set cleanString to theNSString's stringByReplacingOccurrencesOfString:regexPattern withString:"" options:options range:range
+	return cleanString as string
 end stripHTML
 
--- Get notes from Apple Notes
+-- Collect notes
 tell application "Notes"
 	set notesList to every note
 	set allCleanNotes to {}
@@ -21,23 +21,39 @@ tell application "Notes"
 	end repeat
 end tell
 
--- Write to clean text files
-repeat with itemData in allCleanNotes
-	set noteName to item 1 of itemData
-	set noteBody to item 2 of itemData
+-- Export clean files
+repeat with noteData in allCleanNotes
+	set noteName to item 1 of noteData
+	set noteBody to item 2 of noteData
+	
+	-- Fallback if title is empty
+	if noteName is "" then
+		set noteName to "untitled_" & (random number from 100000 to 999999) as string
+	end if
+	
+	-- Remove HTML from body
 	set cleanText to stripHTML(noteBody)
 	
-	-- Clean filename
+	-- Clean file name
 	set safeName to do shell script "echo " & quoted form of noteName & " | tr -cd '[:alnum:]_-'"
 	
-	-- Build file path
+	-- Paths
 	set folderPath to (POSIX path of (path to desktop)) & "ExportedNotesClean/"
 	set filePath to folderPath & safeName & ".txt"
+	
+	-- Make folder
 	do shell script "mkdir -p " & quoted form of folderPath
 	
-	-- Use POSIX file only, NOT alias
-	set fileRef to open for access (POSIX file filePath) with write permission
-	set eof of fileRef to 0
-	write cleanText to fileRef as «class utf8»
-	close access fileRef
+	try
+		-- Write to file safely
+		set fileDescriptor to open for access (POSIX file filePath) with write permission
+		set eof of fileDescriptor to 0
+		write cleanText to fileDescriptor as «class utf8»
+		close access fileDescriptor
+	on error errMsg number errNum
+		try
+			close access (POSIX file filePath)
+		end try
+		log "Error writing note: " & noteName & " — " & errMsg
+	end try
 end repeat
