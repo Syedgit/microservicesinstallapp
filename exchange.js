@@ -1,248 +1,463 @@
-Soltuion # 1
 
+const userModel = require('../models/user');
+const announcementModel = require('../models/announcement');
+const {verifyToken} = require('../utils/token');
+const {validationResult} = require('express-validator');
+const {logger} = require('../utils/logger');
+const {ERROR} = require('../constants');
 
-'use strict';
-
-import redis from 'redis';
-import { config, HTTP_STATUS, logger } from '../common/index.js';
-import { RateLimiterRedis, RateLimiterMemory } from 'rate-limiter-flexible';
-import { authGuard } from '../components/index.js';
-
-const redisClient = redis.createClient({
-    host: config.REDIS.REDIS_HOST,
-    port: config.REDIS.REDIS_PORT,
-    enable_offline_queue: false,
-});
-
-redisClient.on('error', (e) => {
-    logger.error({ e });
-});
-
-const rateLimiterMemory = new RateLimiterMemory({
-    points: config.RATE_LIMIT.MEMORY_RATE_LIMIT_POINTS || 60,
-    duration: config.RATE_LIMIT.MEMORY_RATE_LIMIT_DURATION || 60,
+module.exports.isAuth = async (req, res, next) => {
+  const {access_token} = req.cookies;
+  const user = await userModel.findOne({
+    accessTokens: access_token
   });
-
-
-const rateLimiter = new RateLimiterRedis({
-    storeClient: redisClient,
-    keyPrefix: 'rate_limit_middleware',
-    points: config.RATE_LIMIT.REDIS_RATE_LIMIT_POINTS || 300,
-    duration: config.RATE_LIMIT.REDIS_RATE_LIMIT_DURATION || 60, 
-    inmemoryBlockOnConsumed: 301,
-    inmemoryBlockDuration: 60,
-    insuranceLimiter: rateLimiterMemory,
-});
-
-async function rateLimitMiddleware(req, res, next) {
-    try {
-        const userId = await authGuard.extractUserId(req.token);
-        const pointsToConsume = userId ? 5 : 1;
-        const limiterKey = userId ?? (req.ip ?? req?.socket.remoteAddress)
-        
-        const limiterRes = await rateLimiter.consume(
-           limiterKey,
-           pointsToConsume,
-        );
-
-        logger.info(limiterRes, limiterKey);
-
-        return next();
-    } catch (e) {
-        logger.error({ rateLimiterCatch: e }, HTTP_STATUS.TOO_MANY_REQUESTS);
-        res.writeHead(
-            e?.httpCode ?? HTTP_STATUS.TOO_MANY_REQUESTS, 
-            { 'Content-Type': 'application/json' },
-        );
-        res.end(JSON.stringify({ success: false }));
-    }
+  if (user) {
+    verifyToken(access_token, async err => {
+      if (err) {
+        logger.log({
+          token: user._id,
+          action: 'middleware isAuth',
+          level: 'info',
+          message: ERROR.INVALID_TOKEN.message
+        });
+        return res.status(400).json({
+          status: 'error',
+          message: ERROR.INVALID_TOKEN.message
+        });
+      }
+      req.currentUserId = user.id;
+      req.currentUserRole = user.role;
+      return next();
+    });
+  } else {
+    return res.status(400).json({status: 'error'});
+  }
 };
 
-export { rateLimitMiddleware };
-
-
-solution # 2 
-
-Selected solution 
-'use strict';
-
-import redis from 'redis';
-import { config, HTTP_STATUS, logger } from '../common/index.js';
-import { RateLimiterRedis, RateLimiterMemory } from 'rate-limiter-flexible';
-import { authGuard } from '../components/index.js';
-
-const redisClient = redis.createClient({
-    host: config.REDIS.REDIS_HOST,
-    port: config.REDIS.REDIS_PORT,
-    enable_offline_queue: false,
-});
-
-redisClient.on('error', (e) => {
-    logger.error({ e });
-});
-
-const rateLimiterMemory = new RateLimiterMemory({
-    points: config.RATE_LIMIT.MEMORY_RATE_LIMIT_POINTS || 60,
-    duration: config.RATE_LIMIT.MEMORY_RATE_LIMIT_DURATION || 60,
-  });
-
-
-const rateLimiter = new RateLimiterRedis({
-    storeClient: redisClient,
-    keyPrefix: 'rate_limit_middleware',
-    points: config.RATE_LIMIT.REDIS_RATE_LIMIT_POINTS || 300,
-    duration: config.RATE_LIMIT.REDIS_RATE_LIMIT_DURATION || 60, 
-    inmemoryBlockOnConsumed: 301,
-    inmemoryBlockDuration: 60,
-    insuranceLimiter: rateLimiterMemory,
-});
-
-async function rateLimitMiddleware(req, res, next) {
-    try {
-        const userId = await authGuard.extractUserId(req.token);
-        const pointsToConsume = userId ? 1 : 5;
-        const limiterKey = req.ip ?? req?.socket.remoteAddress;
-        
-        const limiterRes = await rateLimiter.consume(
-           limiterKey,
-           pointsToConsume,
-        );
-
-        logger.info(limiterRes, limiterKey);
-
-        return next();
-    } catch (e) {
-        logger.error({ rateLimiterCatch: e }, HTTP_STATUS.TOO_MANY_REQUESTS);
-        res.writeHead(
-            e?.httpCode ?? HTTP_STATUS.TOO_MANY_REQUESTS, 
-            { 'Content-Type': 'application/json' },
-        );
-        res.end(JSON.stringify({ success: false }));
+module.exports.access = roles => {
+  return async (req, res, next) => {
+    if (roles) {
+      return next();
     }
+
+    return res.status(400).json({status: 'error'});
+  };
 };
 
-export { rateLimitMiddleware };
-
-Solution # 3 
-
-
-'use strict';
-
-import redis from 'redis';
-import { config, HTTP_STATUS, logger } from '../common/index.js';
-import { RateLimiterRedis, RateLimiterMemory } from 'rate-limiter-flexible';
-import { authGuard } from '../components/index.js';
-
-const redisClient = redis.createClient({
-    host: config.REDIS.REDIS_HOST,
-    port: config.REDIS.REDIS_PORT,
-    enable_offline_queue: false,
-});
-
-redisClient.on('error', (e) => {
-    logger.error({ e });
-});
-
-const rateLimiterMemory = new RateLimiterMemory({
-    points: config.RATE_LIMIT.MEMORY_RATE_LIMIT_POINTS || 60,
-    duration: config.RATE_LIMIT.MEMORY_RATE_LIMIT_DURATION || 60,
-  });
-
-
-const rateLimiter = new RateLimiterRedis({
-    storeClient: redisClient,
-    keyPrefix: 'rate_limit_middleware',
-    points: config.RATE_LIMIT.REDIS_RATE_LIMIT_POINTS || 300,
-    duration: config.RATE_LIMIT.REDIS_RATE_LIMIT_DURATION || 60, 
-    inmemoryBlockOnConsumed: 301,
-    inmemoryBlockDuration: 60,
-    insuranceLimiter: rateLimiterMemory,
-});
-
-async function rateLimitMiddleware(req, res, next) {
-    try {
-        const userId = await authGuard.extractUserId(req.token);
-        const pointsToConsume = userId ? 1 : 5;
-        const limiterKey = userId ?? (req.ip ?? req?.socket.remoteAddress)
-        
-        const limiterRes = await rateLimiter.consume(
-           limiterKey,
-           pointsToConsume,
-        );
-
-        logger.info(limiterRes, limiterKey);
-
-        return next();
-    } catch (e) {
-        logger.error({ rateLimiterCatch: e }, HTTP_STATUS.TOO_MANY_REQUESTS);
-        res.writeHead(
-            e?.httpCode ?? HTTP_STATUS.TOO_MANY_REQUESTS, 
-            { 'Content-Type': 'application/json' },
-        );
-        res.end(JSON.stringify({ success: false }));
-    }
+module.exports.validation = async (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(422).json({errors: errors.array({onlyFirstError: true})});
+  } else {
+    return next();
+  }
 };
 
-export { rateLimitMiddleware };
 
-solution # 4
+index.js 2
 
+Accessibility information
+This page has four areas: Information about the challenge, a tree view “File Explorer” containing the project files, a “Code blocks” section with a list of code blocks that can be chosen as answers to be submitted, and a code viewer section. The code viewer section has tabs displaying opened files, with the currently opened file presented in a table. This table has three columns: Code block indicator (only present on the first line of a code block) which can be used to select the code block as an answer, line number, and the code itself. Each line of code within a code block is prefixed with ‘CBX’, where X is a number used to distinguish between code blocks. Opening category information or pressing the hints or submit buttons will open a modal dialog.
 
-'use strict';
+Skip to Code Editor
+Locate the vulnerability
+Fix the vulnerability
+Locate the vulnerability
+Review the highlighted code blocks in the source code and select 1 code block that causes the vulnerability listed below.
 
-import redis from 'redis';
-import { config, HTTP_STATUS, logger } from '../common/index.js';
-import { RateLimiterRedis, RateLimiterMemory } from 'rate-limiter-flexible';
-import { authGuard } from '../components/index.js';
+Vulnerability Category
+Access Control - Missing Object Level Access Control
 
-const redisClient = redis.createClient({
-    host: config.REDIS.REDIS_HOST,
-    port: config.REDIS.REDIS_PORT,
-    enable_offline_queue: false,
-});
+Actions
+0/1 code block(s) selected
 
-redisClient.on('error', (e) => {
-    logger.error({ e });
-});
+Attempts left: 1
 
-const rateLimiterMemory = new RateLimiterMemory({
-    points: config.RATE_LIMIT.MEMORY_RATE_LIMIT_POINTS || 60,
-    duration: config.RATE_LIMIT.MEMORY_RATE_LIMIT_DURATION || 60,
-  });
+View shortcuts keyboard hotkey:?
+
+File Explorer
+Highlighted files only: 17 files hidden
 
 
-const rateLimiter = new RateLimiterRedis({
-    storeClient: redisClient,
-    keyPrefix: 'rate_limit_middleware',
-    points: config.RATE_LIMIT.REDIS_RATE_LIMIT_POINTS || 300,
-    duration: config.RATE_LIMIT.REDIS_RATE_LIMIT_DURATION || 60, 
-    inmemoryBlockOnConsumed: 301,
-    inmemoryBlockDuration: 60,
-    insuranceLimiter: rateLimiterMemory,
-});
+middlewares1 code blocks left, 0 code blocks ignored
+index.js1 code blocks left, 0 code blocks ignored
+1
+routes3 code blocks left, 0 code blocks ignored
+index.js3 code blocks left, 0 code blocks ignored
+3
+Code blocks
+index.js:38-40
+index.js:81-81
+index.js:160-160
+index.js:226-226
+const router = require('express').Router();
+const {
+  body,
+  param,
+  cookie,
+  sanitizeBody,
+  sanitizeParam,
+  sanitizeCookie
+} = require('express-validator');
+const AuthController = require('../controllers/auth.controller');
+const AnnouncementsController = require('../controllers/announcements.controller');
+const UsersController = require('../controllers/users.controller');
+const {isAuth, access, validation} = require('../middlewares');
 
-async function rateLimitMiddleware(req, res, next) {
-    try {
-        const userId = await authGuard.extractUserId(req.token);
-        const pointsToConsume = userId ? 1 : 5;
-        const limiterKey = userId ?? (req.ip ?? req?.socket.remoteAddress)
-        
-        const limiterRes = await rateLimiter.consume(
-           limiterKey,
-           pointsToConsume,
-        );
+router.post(
+  '/registration',
+  [
+    body('firstName')
+      .isString()
+      .trim()
+      .notEmpty()
+      .isLength({max: 50}),
+    body('lastName')
+      .isString()
+      .trim()
+      .notEmpty()
+      .isLength({max: 50}),
+    body('email')
+      .isEmail()
+      .notEmpty()
+      .isLength({max: 50}),
+    body('phone')
+      .isMobilePhone('any')
+      .notEmpty()
+      .isLength({max: 50}),
+    body('password')
+      .notEmpty()
+      .isLength({min: 10, max: 160})
+      .custom(value => {
+        if (/[A-Z]/.test(value)) {
+          if (/[a-z]/.test(value)) {
+            if (/[0-9]/.test(value)) {
+              return true;
+            }
+          }
+        }
+        throw new Error('Password is not correct');
+      }),
+    body(
+      'passwordConfirmation',
+      'passwordConfirmation field must have the same value as the password field'
+    )
+      .exists()
+      .custom((value, {req}) => value === req.body.password),
+    sanitizeBody(['firstName', 'lastName', 'email', 'phone']).escape()
+  ],
+  validation,
+  AuthController.registration
+);
 
-        logger.info(limiterRes, limiterKey);
+router.post(
+  '/login',
+  [
+    body('email')
+      .isEmail()
+      .notEmpty(),
+    body('password').notEmpty()
+  ],
+  validation,
+  AuthController.login
+);
 
-        return next();
-    } catch (e) {
-        logger.error({ rateLimiterCatch: e }, HTTP_STATUS.INTERNAL_SERVER_ERROR);
-        res.writeHead(
-            e?.httpCode ?? HTTP_STATUS.INTERNAL_SERVER_ERROR, 
-            { 'Content-Type': 'application/json' },
-        );
-        res.end(JSON.stringify({ success: false }));
-    }
-};
+router.get('/announcements', AnnouncementsController.getListAnnouncements);
+router.get(
+  '/announcements/all',
+  cookie('access_token')
+    .notEmpty()
+    .isJWT(),
+  sanitizeCookie('access_token').escape(),
+  validation,
+  isAuth,
+  access(['admin']),
+  AnnouncementsController.getListAnnouncements
+);
 
-export { rateLimitMiddleware };
+router.post(
+  '/announcements',
+  [
+    body('title')
+      .notEmpty()
+      .trim()
+      .isString()
+      .isLength({max: 70}),
+    body('description')
+      .notEmpty()
+      .trim()
+      .isString()
+      .isLength({max: 500}),
+    body('published').isBoolean(),
+    cookie('access_token')
+      .notEmpty()
+      .isJWT(),
+    sanitizeCookie('access_token').escape(),
+    sanitizeBody(['title', 'description', 'published']).escape()
+  ],
+  validation,
+  isAuth,
+  AnnouncementsController.addAnnouncement
+);
+
+router.get(
+  '/announcements/view/:id',
+  param('id')
+    .notEmpty()
+    .isUUID('4'),
+  sanitizeParam(['id']).escape(),
+  validation,
+  AnnouncementsController.viewAnnouncement
+);
+
+router.get(
+  '/announcements/user',
+  cookie('access_token')
+    .notEmpty()
+    .isJWT(),
+  sanitizeCookie('access_token').escape(),
+  validation,
+  isAuth,
+  AnnouncementsController.getListAnnouncementsAuthor
+);
+
+router.get(
+  '/announcements/user/:id',
+  param('id')
+    .notEmpty()
+    .isUUID('4'),
+  cookie('access_token')
+    .notEmpty()
+    .isJWT(),
+  sanitizeCookie('access_token').escape(),
+  sanitizeParam(['id']).escape(),
+  validation,
+  isAuth,
+  access(['admin']),
+  AnnouncementsController.getListAnnouncementsAuthor
+);
+
+router.get(
+  '/announcements/edit/:id',
+  param('id')
+    .notEmpty()
+    .isUUID('4'),
+  cookie('access_token')
+    .notEmpty()
+    .isJWT(),
+  sanitizeCookie('access_token').escape(),
+  sanitizeParam(['id']).escape(),
+  validation,
+  isAuth,
+  access(['admin', 'author']),
+  AnnouncementsController.getAnnouncement
+);
+
+router.put(
+  '/announcements/edit/:id',
+  [
+    body('title')
+      .notEmpty()
+      .trim()
+      .isString()
+      .isLength({max: 70}),
+    body('description')
+      .notEmpty()
+      .trim()
+      .isString()
+      .isLength({max: 500}),
+    body('published').isBoolean(),
+    param('id')
+      .notEmpty()
+      .isUUID('4'),
+    cookie('access_token')
+      .notEmpty()
+      .isJWT(),
+    sanitizeCookie('access_token').escape(),
+    sanitizeParam(['id']).escape(),
+    sanitizeBody(['title', 'description', 'published']).escape()
+  ],
+  validation,
+  isAuth,
+  access(['admin', 'author']),
+  AnnouncementsController.editAnnouncement
+);
+
+router.delete(
+  '/announcements/delete/:id',
+  param('id')
+    .notEmpty()
+    .isUUID('4'),
+  cookie('access_token')
+    .notEmpty()
+    .isJWT(),
+  sanitizeCookie('access_token').escape(),
+  sanitizeParam(['id']).escape(),
+  validation,
+  isAuth,
+  access(['admin', 'author']),
+  AnnouncementsController.deleteAnnouncement
+);
+
+router.post(
+  '/announcements/approve/:id',
+  [
+    body('approved').isBoolean(),
+    param('id')
+      .notEmpty()
+      .isUUID('4'),
+    cookie('access_token')
+      .notEmpty()
+      .isJWT(),
+    sanitizeCookie('access_token').escape(),
+    sanitizeParam(['id']).escape()
+  ],
+  validation,
+  isAuth,
+  access(['admin']),
+  AnnouncementsController.approveAnnouncement
+);
+
+router.post(
+  '/announcements/publish/:id',
+  [
+    body('published').isBoolean(),
+    param('id')
+      .notEmpty()
+      .isUUID('4'),
+    cookie('access_token')
+      .notEmpty()
+      .isJWT(),
+    sanitizeCookie('access_token').escape(),
+    sanitizeParam(['id']).escape()
+  ],
+  validation,
+  isAuth,
+  access(['admin', 'author']),
+  AnnouncementsController.publishAnnouncement
+);
+
+router.get(
+  '/user/activate/:activateToken',
+  param('activateToken')
+    .notEmpty()
+    .isJWT(),
+  validation,
+  UsersController.activate
+);
+
+router.post(
+  '/user/reset',
+  body('email')
+    .isEmail()
+    .notEmpty(),
+  validation,
+  UsersController.resetPassword
+);
+
+router.get(
+  '/user/reset/:resetToken',
+  param('resetToken')
+    .notEmpty()
+    .isJWT(),
+  validation,
+  UsersController.resetPassword
+);
+
+router.post(
+  '/user/reset/:resetToken',
+  [
+    param('resetToken')
+      .notEmpty()
+      .isJWT(),
+    body('password')
+      .notEmpty()
+      .isLength({min: 10, max: 160})
+      .custom(value => {
+        if (/[A-Z]/.test(value)) {
+          if (/[a-z]/.test(value)) {
+            if (/[0-9]/.test(value)) {
+              return true;
+            }
+          }
+        }
+        throw new Error('Password is not correct');
+      }),
+    body(
+      'passwordConfirmation',
+      'passwordConfirmation field must have the same value as the password field'
+    )
+      .exists()
+      .custom((value, {req}) => value === req.body.password)
+  ],
+  validation,
+  UsersController.resetPassword
+);
+
+router.get(
+  '/user/info/:id',
+  param('id')
+    .notEmpty()
+    .isUUID('4'),
+  cookie('access_token')
+    .notEmpty()
+    .isJWT(),
+  sanitizeCookie('access_token').escape(),
+  sanitizeParam(['id']).escape(),
+  validation,
+  isAuth,
+  access(['admin']),
+  UsersController.getUserInfo
+);
+
+router.get(
+  '/user/info',
+  cookie('access_token')
+    .notEmpty()
+    .isJWT(),
+  sanitizeCookie('access_token').escape(),
+  validation,
+  isAuth,
+  UsersController.getUserInfo
+);
+
+router.put(
+  '/user/info',
+  [
+    body('firstName')
+      .isString()
+      .trim()
+      .notEmpty()
+      .isLength({max: 50}),
+    body('lastName')
+      .isString()
+      .trim()
+      .notEmpty()
+      .isLength({max: 50}),
+    body('phone')
+      .isMobilePhone('any')
+      .notEmpty()
+      .isLength({max: 50}),
+    cookie('access_token')
+      .notEmpty()
+      .isJWT(),
+    sanitizeCookie('access_token').escape(),
+    sanitizeBody(['firstName', 'lastName', 'phone']).escape()
+  ],
+  validation,
+  isAuth,
+  UsersController.editUserInfo
+);
+
+router.get(
+  '/logout',
+  cookie('access_token')
+    .notEmpty()
+    .isJWT(),
+  sanitizeCookie('access_token').escape(),
+  validation,
+  isAuth,
+  AuthController.logout
+);
+
+module.exports = router;
