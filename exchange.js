@@ -1,272 +1,151 @@
-solution # 1
+appRoutes.js
 
 
-import { Component } from '@angular/core';
-import { FormControl, FormGroup, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
-import { AuthService } from 'src/app/services/auth.service';
+'use strict'
 
-@Component({
-  selector: 'app-login',
-  templateUrl: './login-page.component.html',
-  styleUrls: ['./login-page.component.scss'],
-})
-export class LoginComponent {
-  loginForm: FormGroup;
+const express = require('express')
 
-  isServerError = false;
-  serverErrorMessage: string = '';
+const router = new express.Router()
+const appAccountController = require('../controllers/appAccountController')
+const applicationsController = require('../controllers/applicationsController')
+const {
+    loginLimiter,
+    addAppLimiter,
+    accountRegisterLimiter
+} = require('../rateLimiters')
 
-  constructor(private authService: AuthService, private router: Router) {
-    this.loginForm = new FormGroup(
-      {
-        email: new FormControl('', [Validators.required, Validators.email]),
-        password: new FormControl('', [Validators.required]),
-      },
-      this.formValidator.bind(this)
-    );
-  }
+router.post('/accountRegister',
+    accountRegisterLimiter,
+    appAccountController.registerAppAccount)
 
-  onSubmit() {
-    if (this.loginForm.invalid) return;
+router.post('/accountlogin',
+    loginLimiter,
+    appAccountController.loginAppAccount)
 
-    this.authService.login(this.loginForm.value).subscribe(
-      () => {
-        const redirectUrl = this.authService.redirectUrl;
-        if (redirectUrl) {
-          this.router.navigate([redirectUrl]);
-        } else {
-          this.router.navigate(['/recipes']);
-        }
-      },
-      (error) => {
-        switch (error.error.type) {
-          case 'badCredentialsException':
-            this.serverErrorMessage = 'Invalid email or password';
-            break;
-          case 'accessDeniedException':
-            this.serverErrorMessage = 'The user is blocked';
-            break;
-          default:
-            this.serverErrorMessage = 'Login error. Please try again later';
-        }
+router.get('/accountlogout', appAccountController.appAccountLogout)
 
-        this.isServerError = true;
-        this.loginForm.updateValueAndValidity();
-      }
-    );
-  }
+router.get('/accountregister/verifyemail/:verfyToken',
+    accountRegisterLimiter,
+    appAccountController.verifyEmail)
 
-  formValidator() {
-    if (!this.isServerError) return null;
+router.post('/addapplication',
+    addAppLimiter,
+    appAccountController.requireLogin,
+    applicationsController.addDomainName)
 
-    this.isServerError = false;
-    return { serverError: true };
-  }
-}
+router.post('/appVerify',
+    addAppLimiter,
+    appAccountController.checkAppAccountCreds,
+    applicationsController.verifyDomain)
 
-Solution #2 
+router.get('/usersList/:domainName',
+    appAccountController.requireLogin,
+    applicationsController.getUsersList)
 
-Selected solution 
-import { Component } from '@angular/core';
-import { FormControl, FormGroup, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
-import { AuthService } from 'src/app/services/auth.service';
+module.exports = router
 
-@Component({
-  selector: 'app-login',
-  templateUrl: './login-page.component.html',
-  styleUrls: ['./login-page.component.scss'],
-})
-export class LoginComponent {
-  loginForm: FormGroup;
+Socket.js
 
-  isServerError = false;
-  serverErrorMessage: string = '';
+Code block 1 selected
+'use strict'
 
-  constructor(private authService: AuthService, private router: Router) {
-    this.loginForm = new FormGroup(
-      {
-        email: new FormControl('', [Validators.required, Validators.email]),
-        password: new FormControl('', [Validators.required]),
-      },
-      this.formValidator.bind(this)
-    );
-  }
+const { logger } = require('../logger/logger-init')
+const { redisClientSystemSets } = require('../redisDb/redisDb')
+const { socketMessagesLimiter } = require('../rateLimiters')
 
-  onSubmit() {
-    if (this.loginForm.invalid) return;
-
-    this.authService.login(this.loginForm.value).subscribe(
-      () => {
-        const redirectUrl = this.authService.redirectUrl;
-        const authUser = this.authService.userChange$.value;
-
-        if (
-          (redirectUrl && !redirectUrl.includes('admin')) ||
-          (redirectUrl && redirectUrl.includes('admin') && authUser?.isAdmin)
+let io
+function requireLogin(socket, next) {
+    if ((!socket.request.session)
+        || (!socket.request.session.email)
+        || (!socket.request.session.logged)
+        || (!socket.request.session.domainOrigin)
         ) {
-          this.router.navigate([redirectUrl]);
-        } else {
-          this.router.navigate(['/recipes']);
-        }
-      },
-      (error) => {
-        switch (error.error.type) {
-          case 'badCredentialsException':
-            this.serverErrorMessage = 'Invalid email or password';
-            break;
-          case 'accessDeniedException':
-            this.serverErrorMessage = 'The user is blocked';
-            break;
-          default:
-            this.serverErrorMessage = 'Login error. Please try again later';
-        }
-
-        this.isServerError = true;
-        this.loginForm.updateValueAndValidity();
-      }
-    );
-  }
-
-  formValidator() {
-    if (!this.isServerError) return null;
-
-    this.isServerError = false;
-    return { serverError: true };
-  }
+        return next(new Error('not authorized'))
+    }
+    if (!socket.request.session.emailVerified) {
+        return next(new Error('not authorized.email not verified'))
+    }
+    return next()
 }
 
-Solution # 3
+module.exports.init = (ioExample, callback) => {
+    io = ioExample
 
+    io.origins(async (origin, originsCallback) => {
+        const originDomain = origin.replace('https://', '')
+        let isOriginAlowed
+        try {
+            isOriginAlowed = await redisClientSystemSets.sismemberAsync(
+                'allowedDomains',
+                originDomain
+            )
+        } catch (error) {
+            logger.error(error)
+            return originsCallback('origin not allowed', false)
+        }
+        if (isOriginAlowed) {
+            return originsCallback(null, true)
+        }
+        logger.error({
+            type: 'socket connection denyed',
+            origin
+        })
+        return originsCallback('origin not allowed', false)
+    })
 
-import { Component } from '@angular/core';
-import { FormControl, FormGroup, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
-import { AuthService } from 'src/app/services/auth.service';
+    io.use(requireLogin)
+    io.sockets.on('error', (error) => {
+        logger.error(error)
+    })
 
-@Component({
-  selector: 'app-login',
-  templateUrl: './login-page.component.html',
-  styleUrls: ['./login-page.component.scss'],
-})
-export class LoginComponent {
-  loginForm: FormGroup;
-
-  isServerError = false;
-  serverErrorMessage: string = '';
-
-  constructor(private authService: AuthService, private router: Router) {
-    this.loginForm = new FormGroup(
-      {
-        email: new FormControl('', [Validators.required, Validators.email]),
-        password: new FormControl('', [Validators.required]),
-      },
-      this.formValidator.bind(this)
-    );
-  }
-
-  onSubmit() {
-    if (this.loginForm.invalid) return;
-
-    this.authService.login(this.loginForm.value).subscribe(
-      () => {
-        const redirectUrl = this.authService.redirectUrl;
-        if (redirectUrl) {
-          this.router.navigate([redirectUrl]);
+    io.on('connection', (socket) => {
+        if (socket.request.session && socket.request.session.domainOrigin) {
+            socket.join(socket.request.session.domainOrigin)
+            socket.to(socket.request.session.domainOrigin).emit(
+                'userentered',
+                socket.request.session.nickName
+            )
         } else {
-          this.router.navigate(['/recipes']);
-        }
-      },
-      (error) => {
-        switch (error.error.type) {
-          case 'badCredentialsException':
-            this.serverErrorMessage = 'Invalid email or password';
-            break;
-          case 'accessDeniedException':
-            this.serverErrorMessage = 'The user is blocked';
-            break;
-          default:
-            this.serverErrorMessage = 'Login error. Please try again later';
+            socket.request.session.domainOrigin = '/'
         }
 
-        this.isServerError = true;
-        this.loginForm.updateValueAndValidity();
-      }
-    );
-  }
+        socket.on('disconnect', (reason) => {
+            logger.info(`socket ${socket.id} disconnect reason`, reason)
+            if (socket.request.session && socket.request.session.domainOrigin) {
+                socket.to(socket.request.session.domainOrigin).emit(
+                    'userleaved',
+                    socket.request.session.nickName
+                )
+            }
+        })
 
-  formValidator() {
-    if (!this.isServerError) return null;
+        socket.on('message', async (data, messCallback) => {
+            try {
+                await socketMessagesLimiter.consume(socket.handshake.address)
+                socket.to(socket.request.session.domainOrigin ).emit(
+                    'message',
+                    data
+                )
+            } catch (rejRes) {
+                socket.emit('blocked', { 'retry-ms': rejRes.msBeforeNext })
+            }
+            return messCallback(true)
+        })
 
-    this.isServerError = false;
-    return { serverError: true };
-  }
+        socket.on('error', (error) => {
+            logger.error(error)
+            if (
+                error.message === 'not authorized'
+                || error.message === 'not authorized.email not verified'
+            ) {
+                socket.disconnect()
+            }
+        })
+    })
+    logger.info('socket initialised')
+    callback(null, io)
 }
 
-Solution # 4
-
-
-import { Component } from '@angular/core';
-import { FormControl, FormGroup, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
-import { AuthService } from 'src/app/services/auth.service';
-
-@Component({
-  selector: 'app-login',
-  templateUrl: './login-page.component.html',
-  styleUrls: ['./login-page.component.scss'],
-})
-export class LoginComponent {
-  loginForm: FormGroup;
-
-  isServerError = false;
-  serverErrorMessage: string = '';
-
-  constructor(private authService: AuthService, private router: Router) {
-    this.loginForm = new FormGroup(
-      {
-        email: new FormControl('', [Validators.required, Validators.email]),
-        password: new FormControl('', [Validators.required]),
-      },
-      this.formValidator.bind(this)
-    );
-  }
-
-  onSubmit() {
-    if (this.loginForm.invalid) return;
-
-    this.authService.login(this.loginForm.value).subscribe(
-      () => {
-        const redirectUrl = this.authService.redirectUrl;
-        if (redirectUrl) {
-          this.router.navigate([redirectUrl]);
-        } else {
-          this.router.navigate(['/recipes']);
-        }
-      },
-      (error) => {
-        switch (error.error.type) {
-          case 'badCredentialsException':
-            this.serverErrorMessage = 'Invalid email or password';
-            break;
-          case 'accessDeniedException':
-            this.serverErrorMessage = 'The user is blocked';
-            break;
-          default:
-            this.serverErrorMessage = 'Login error. Please try again later';
-        }
-
-        this.isServerError = true;
-        this.loginForm.updateValueAndValidity();
-      }
-    );
-  }
-
-  formValidator() {
-    if (!this.isServerError) return null;
-
-    this.isServerError = false;
-    return { serverError: true };
-  }
+module.exports.getIo = () => {
+    return io
 }
