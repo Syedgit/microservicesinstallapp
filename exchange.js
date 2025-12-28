@@ -1,151 +1,112 @@
-appRoutes.js
+json.parser-middleware.js
+'use strict';
 
+import { HTTP_STATUS, logger, ApiError } from '../common/index.js';
 
-'use strict'
+const allowMethods = Object.freeze(['POST', 'PUT', 'PATCH']);
 
-const express = require('express')
+const LOG_MESSAGE = Object.freeze({
+    PAYLODAD_TOO_LARGE: 'payload too large',
+});
 
-const router = new express.Router()
-const appAccountController = require('../controllers/appAccountController')
-const applicationsController = require('../controllers/applicationsController')
-const {
-    loginLimiter,
-    addAppLimiter,
-    accountRegisterLimiter
-} = require('../rateLimiters')
-
-router.post('/accountRegister',
-    accountRegisterLimiter,
-    appAccountController.registerAppAccount)
-
-router.post('/accountlogin',
-    loginLimiter,
-    appAccountController.loginAppAccount)
-
-router.get('/accountlogout', appAccountController.appAccountLogout)
-
-router.get('/accountregister/verifyemail/:verfyToken',
-    accountRegisterLimiter,
-    appAccountController.verifyEmail)
-
-router.post('/addapplication',
-    addAppLimiter,
-    appAccountController.requireLogin,
-    applicationsController.addDomainName)
-
-router.post('/appVerify',
-    addAppLimiter,
-    appAccountController.checkAppAccountCreds,
-    applicationsController.verifyDomain)
-
-router.get('/usersList/:domainName',
-    appAccountController.requireLogin,
-    applicationsController.getUsersList)
-
-module.exports = router
-
-Socket.js
-
-Code block 1 selected
-'use strict'
-
-const { logger } = require('../logger/logger-init')
-const { redisClientSystemSets } = require('../redisDb/redisDb')
-const { socketMessagesLimiter } = require('../rateLimiters')
-
-let io
-function requireLogin(socket, next) {
-    if ((!socket.request.session)
-        || (!socket.request.session.email)
-        || (!socket.request.session.logged)
-        || (!socket.request.session.domainOrigin)
-        ) {
-        return next(new Error('not authorized'))
+function jsonParserMiddleware(req, res, next) {
+    if (!allowMethods.includes(req.method)) {
+        return next();
     }
-    if (!socket.request.session.emailVerified) {
-        return next(new Error('not authorized.email not verified'))
+
+    if (!(req.headers['content-type']).toLowerCase()
+        .includes('application/json')) {
+        return next();
     }
-    return next()
-}
 
-module.exports.init = (ioExample, callback) => {
-    io = ioExample
+    let data = '';
 
-    io.origins(async (origin, originsCallback) => {
-        const originDomain = origin.replace('https://', '')
-        let isOriginAlowed
+    req.on('data', (chunk) => {
+        data += chunk;
+        if (data.length > 1e6) {
+            logger.info(LOG_MESSAGE.PAYLODAD_TOO_LARGE);
+            req.destroy()
+        }
+    });
+
+    req.on('end', () => {
+        if (res.writableEnded) {
+            return;
+        }
         try {
-            isOriginAlowed = await redisClientSystemSets.sismemberAsync(
-                'allowedDomains',
-                originDomain
-            )
-        } catch (error) {
-            logger.error(error)
-            return originsCallback('origin not allowed', false)
+            req.body = JSON.parse(data);
+            return next();
+        } catch (e) {
+            logger.error({ message: e?.message, stack: e?.stack })
+            res.writeHead(
+                e?.httpCode ?? HTTP_STATUS.INTERNAL_SERVER_ERROR,
+                 { 'Content-Type': 'application/json' },
+            );
+            res.end(JSON.stringify({ 
+                success: false, 
+                message: (e instanceof ApiError) ? e?.message : '', 
+            }));
         }
-        if (isOriginAlowed) {
-            return originsCallback(null, true)
-        }
-        logger.error({
-            type: 'socket connection denyed',
-            origin
-        })
-        return originsCallback('origin not allowed', false)
-    })
-
-    io.use(requireLogin)
-    io.sockets.on('error', (error) => {
-        logger.error(error)
-    })
-
-    io.on('connection', (socket) => {
-        if (socket.request.session && socket.request.session.domainOrigin) {
-            socket.join(socket.request.session.domainOrigin)
-            socket.to(socket.request.session.domainOrigin).emit(
-                'userentered',
-                socket.request.session.nickName
-            )
-        } else {
-            socket.request.session.domainOrigin = '/'
-        }
-
-        socket.on('disconnect', (reason) => {
-            logger.info(`socket ${socket.id} disconnect reason`, reason)
-            if (socket.request.session && socket.request.session.domainOrigin) {
-                socket.to(socket.request.session.domainOrigin).emit(
-                    'userleaved',
-                    socket.request.session.nickName
-                )
-            }
-        })
-
-        socket.on('message', async (data, messCallback) => {
-            try {
-                await socketMessagesLimiter.consume(socket.handshake.address)
-                socket.to(socket.request.session.domainOrigin ).emit(
-                    'message',
-                    data
-                )
-            } catch (rejRes) {
-                socket.emit('blocked', { 'retry-ms': rejRes.msBeforeNext })
-            }
-            return messCallback(true)
-        })
-
-        socket.on('error', (error) => {
-            logger.error(error)
-            if (
-                error.message === 'not authorized'
-                || error.message === 'not authorized.email not verified'
-            ) {
-                socket.disconnect()
-            }
-        })
-    })
-    logger.info('socket initialised')
-    callback(null, io)
+    });
 }
 
-module.exports.getIo = () => {
-    return io
-}
+export { jsonParserMiddleware };
+
+rate-linit
+
+
+'use strict';
+
+import redis from 'redis';
+import { config, HTTP_STATUS, logger } from '../common/index.js';
+import { RateLimiterRedis, RateLimiterMemory } from 'rate-limiter-flexible';
+import { authGuard } from '../components/index.js';
+
+const redisClient = redis.createClient({
+    host: config.REDIS.REDIS_HOST,
+    port: config.REDIS.REDIS_PORT,
+    enable_offline_queue: false,
+});
+
+redisClient.on('error', (e) => {
+    logger.error({ e });
+});
+
+const rateLimiterMemory = new RateLimiterMemory({
+    points: config.RATE_LIMIT.MEMORY_RATE_LIMIT_POINTS || 60,
+    duration: config.RATE_LIMIT.MEMORY_RATE_LIMIT_DURATION || 60,
+  });
+
+
+const rateLimiter = new RateLimiterRedis({
+    storeClient: redisClient,
+    keyPrefix: 'rate_limit_middleware',
+    points: config.RATE_LIMIT.REDIS_RATE_LIMIT_POINTS || 300,
+    duration: config.RATE_LIMIT.REDIS_RATE_LIMIT_DURATION || 60, 
+    inmemoryBlockOnConsumed: 301,
+    inmemoryBlockDuration: 60,
+    insuranceLimiter: rateLimiterMemory,
+});
+
+async function rateLimitMiddleware(req, res, next) {
+    try {
+        const userId = await authGuard.extractUserId(req.token);
+
+        if (userId ?? req.token) {
+            await rateLimiter.consume(
+                userId,
+            );
+        }
+
+        return next();
+    } catch (e) {
+        logger.error({ rateLimiterCatch: e }, HTTP_STATUS.TOO_MANY_REQUESTS);
+        res.writeHead(
+            e?.httpCode ?? HTTP_STATUS.TOO_MANY_REQUESTS, 
+            { 'Content-Type': 'application/json' },
+        );
+        res.end(JSON.stringify({ success: false }));
+    }
+};
+
+export { rateLimitMiddleware };
